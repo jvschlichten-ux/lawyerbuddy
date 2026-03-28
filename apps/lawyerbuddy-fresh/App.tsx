@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, CheckBox } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -217,11 +217,16 @@ function CaseDetailScreen({
             <Text style={styles.emptyChecklistText}>No checklist items yet</Text>
           ) : (
             checklistItems.map((item, index) => (
-              <View key={index} style={styles.checklistItem}>
-                <CheckBox
-                  value={checkedItems[index] || false}
-                  onValueChange={() => toggleChecklistItem(index)}
-                />
+              <TouchableOpacity
+                key={index}
+                style={styles.checklistItem}
+                onPress={() => toggleChecklistItem(index)}
+              >
+                <View style={styles.checklistCheckbox}>
+                  {checkedItems[index] && (
+                    <Text style={styles.checklistCheckmark}>✓</Text>
+                  )}
+                </View>
                 <Text
                   style={[
                     styles.checklistItemText,
@@ -230,7 +235,7 @@ function CaseDetailScreen({
                 >
                   {item}
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>
@@ -1325,6 +1330,21 @@ const styles = StyleSheet.create({
   checklistItemCompleted: {
     color: '#888888',
     textDecorationLine: 'line-through',
+  },
+  checklistCheckbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#0066cc',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0a',
+  },
+  checklistCheckmark: {
+    fontSize: 14,
+    color: '#22c55e',
+    fontWeight: '700',
   },
   addItemInputContainer: {
     flexDirection: 'row',

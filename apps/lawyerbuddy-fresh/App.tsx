@@ -297,6 +297,23 @@ function CaseDetailScreen({
   onSendInvite,
   inviteLoading,
   inviteError,
+  messages,
+  newMessage,
+  setNewMessage,
+  messagesLoading,
+  messagesSendingId,
+  courtDates,
+  newDateLabel,
+  setNewDateLabel,
+  newDateValue,
+  setNewDateValue,
+  newDateSeverity,
+  setNewDateSeverity,
+  showAddDateModal,
+  setShowAddDateModal,
+  datesLoading,
+  caseDetailTab,
+  setCaseDetailTab,
 }: {
   caseData: any;
   onBack: () => void;
@@ -309,6 +326,23 @@ function CaseDetailScreen({
   onSendInvite: () => void;
   inviteLoading: boolean;
   inviteError: string;
+  messages: any[];
+  newMessage: string;
+  setNewMessage: (msg: string) => void;
+  messagesLoading: boolean;
+  messagesSendingId: string | null;
+  courtDates: any[];
+  newDateLabel: string;
+  setNewDateLabel: (label: string) => void;
+  newDateValue: string;
+  setNewDateValue: (date: string) => void;
+  newDateSeverity: 'low' | 'medium' | 'high';
+  setNewDateSeverity: (severity: 'low' | 'medium' | 'high') => void;
+  showAddDateModal: boolean;
+  setShowAddDateModal: (show: boolean) => void;
+  datesLoading: boolean;
+  caseDetailTab: 'checklist' | 'messages' | 'documents' | 'dates';
+  setCaseDetailTab: (tab: 'checklist' | 'messages' | 'documents' | 'dates') => void;
 }) {
   const [checklistItems, setChecklistItems] = useState<any[]>([]);
   const [showAddItemInput, setShowAddItemInput] = useState(false);
@@ -499,7 +533,34 @@ function CaseDetailScreen({
           )}
         </View>
 
+        {/* Tabs */}
+        <View style={styles.detailTabs}>
+          {['checklist', 'messages', 'documents', 'dates'].map((tab: any) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.detailTab, caseDetailTab === tab && styles.detailTabActive]}
+              onPress={() => {
+                setCaseDetailTab(tab as any);
+                if (tab === 'messages' && messages.length === 0 && userToken) {
+                  loadMessages(caseData?.id, userToken);
+                }
+                if (tab === 'dates' && courtDates.length === 0 && userToken) {
+                  loadCourtDates(caseData?.id, userToken);
+                }
+              }}
+            >
+              <Text style={[styles.detailTabText, caseDetailTab === tab && styles.detailTabTextActive]}>
+                {tab === 'checklist' && '✓ Checklist'}
+                {tab === 'messages' && '💬 Messages'}
+                {tab === 'documents' && '📄 Documents'}
+                {tab === 'dates' && '📅 Dates'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Checklist Section */}
+        {caseDetailTab === 'checklist' && (
         <View style={styles.detailSection}>
           <View style={styles.checklistHeader}>
             <Text style={styles.detailSectionTitle}>Checklist</Text>
@@ -565,6 +626,118 @@ function CaseDetailScreen({
             ))
           )}
         </View>
+        )}
+
+        {/* Messages Section */}
+        {caseDetailTab === 'messages' && (
+        <View style={styles.detailSection}>
+          <Text style={styles.detailSectionTitle}>Messages</Text>
+          {messagesLoading ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <ActivityIndicator color="#0066cc" size="large" />
+            </View>
+          ) : messages.length === 0 ? (
+            <Text style={{ color: '#888888', marginLeft: 16 }}>No messages yet</Text>
+          ) : (
+            messages.map((msg: any) => (
+              <View key={msg.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}>
+                <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
+                <Text style={{ color: '#ffffff', marginTop: 4 }}>{Buffer.from(msg.content_encrypted, 'base64').toString()}</Text>
+              </View>
+            ))
+          )}
+
+          <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', gap: 8 }}>
+            <TextInput
+              style={{ flex: 1, borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a' }}
+              placeholder="Type a message..."
+              placeholderTextColor="#666666"
+              value={newMessage}
+              onChangeText={setNewMessage}
+              multiline
+            />
+            <TouchableOpacity
+              style={{ backgroundColor: '#0066cc', paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center' }}
+              onPress={() => sendMessage(caseData?.id)}
+              disabled={!!messagesSendingId}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '600' }}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        )}
+
+        {/* Documents Section */}
+        {caseDetailTab === 'documents' && (
+        <View style={styles.detailSection}>
+          <Text style={styles.detailSectionTitle}>Documents</Text>
+          <Text style={{ color: '#888888', marginLeft: 16, marginTop: 8 }}>Document upload coming soon</Text>
+        </View>
+        )}
+
+        {/* Court Dates Section */}
+        {caseDetailTab === 'dates' && (
+        <View style={styles.detailSection}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 }}>
+            <Text style={styles.detailSectionTitle}>Court Dates</Text>
+            <TouchableOpacity
+              style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#22c55e', borderRadius: 6 }}
+              onPress={() => setShowAddDateModal(!showAddDateModal)}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 12 }}>+ Add</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showAddDateModal && (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#1a1a1a', borderRadius: 8, marginBottom: 16 }}>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a', marginBottom: 12 }}
+                placeholder="Date label (e.g. Court Hearing)"
+                placeholderTextColor="#666666"
+                value={newDateLabel}
+                onChangeText={setNewDateLabel}
+              />
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a', marginBottom: 12 }}
+                placeholder="2026-04-15"
+                placeholderTextColor="#666666"
+                value={newDateValue}
+                onChangeText={setNewDateValue}
+              />
+              <TouchableOpacity
+                style={{ backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => addCourtDate(caseData?.id)}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '600' }}>Add Date</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {datesLoading ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <ActivityIndicator color="#0066cc" size="large" />
+            </View>
+          ) : courtDates.length === 0 ? (
+            <Text style={{ color: '#888888', marginLeft: 16 }}>No court dates scheduled</Text>
+          ) : (
+            courtDates.map((date: any) => {
+              const dateObj = new Date(date.occurred_at);
+              const isUpcoming = dateObj > new Date();
+              const bgColor = isUpcoming ? '#22c55e20' : '#66666620';
+              const borderColor = isUpcoming ? '#22c55e' : '#666666';
+              return (
+                <View key={date.id} style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: bgColor, borderLeftWidth: 4, borderLeftColor: borderColor, marginBottom: 8, borderRadius: 4 }}>
+                  <Text style={{ color: '#ffffff', fontWeight: '600', marginBottom: 4 }}>{date.title}</Text>
+                  <Text style={{ color: '#888888', fontSize: 12 }}>{dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                  <Text style={{ color: isUpcoming ? '#22c55e' : '#666666', fontSize: 11, marginTop: 4 }}>
+                    {isUpcoming ? '📅 Upcoming' : '✓ Past'}
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -1800,6 +1973,23 @@ export default function App() {
           onSendInvite={handleSendInvite}
           inviteLoading={inviteLoading}
           inviteError={inviteError}
+          messages={messages}
+          newMessage={newMessage}
+          setNewMessage={setNewMessage}
+          messagesLoading={messagesLoading}
+          messagesSendingId={messagesSendingId}
+          courtDates={courtDates}
+          newDateLabel={newDateLabel}
+          setNewDateLabel={setNewDateLabel}
+          newDateValue={newDateValue}
+          setNewDateValue={setNewDateValue}
+          newDateSeverity={newDateSeverity}
+          setNewDateSeverity={setNewDateSeverity}
+          showAddDateModal={showAddDateModal}
+          setShowAddDateModal={setShowAddDateModal}
+          datesLoading={datesLoading}
+          caseDetailTab={caseDetailTab}
+          setCaseDetailTab={setCaseDetailTab}
         />
       );
     } else {
@@ -2518,6 +2708,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  // Tab Styles
+  detailTabs: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    marginBottom: 16,
+  },
+  detailTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  detailTabActive: {
+    borderBottomColor: '#0066cc',
+  },
+  detailTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#888888',
+  },
+  detailTabTextActive: {
+    color: '#0066cc',
   },
   // Remember Me Checkbox
   // Case Detail Screen

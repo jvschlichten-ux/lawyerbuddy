@@ -213,12 +213,13 @@ export default function App() {
 
       const caseData = {
         title: newCaseTitle,
-        case_type: newCaseType,
-        docket_number: newCaseDocket || undefined,
-        status: 'open',
+        caseType: newCaseType,
+        docketNumber: newCaseDocket || undefined,
       };
 
-      console.log('Creating case:', caseData);
+      console.log('Creating case with data:', JSON.stringify(caseData, null, 2));
+      console.log('POST URL: https://lawyerbuddy-production.up.railway.app/cases');
+      console.log('Auth header: Bearer', token.substring(0, 20) + '...');
 
       const response = await fetch('https://lawyerbuddy-production.up.railway.app/cases', {
         method: 'POST',
@@ -230,9 +231,11 @@ export default function App() {
       });
 
       const data = await response.json();
-      console.log('Create case response:', data);
+      console.log('Response status:', response.status);
+      console.log('Response body:', JSON.stringify(data, null, 2));
 
-      if (response.ok) {
+      if (response.ok && data.success) {
+        console.log('Case created successfully:', data.case);
         // Reset form
         setNewCaseTitle('');
         setNewCaseType('Family Law');
@@ -242,10 +245,13 @@ export default function App() {
         // Refresh cases list
         await fetchCases();
       } else {
-        setNewCaseError(data.message || 'Failed to create case');
+        const errorMessage = data.error || data.message || 'Failed to create case';
+        console.error('Case creation error:', errorMessage);
+        setNewCaseError(errorMessage);
       }
     } catch (err: any) {
-      console.error('Error creating case:', err);
+      console.error('Network error creating case:', err);
+      console.error('Error details:', JSON.stringify(err, null, 2));
       setNewCaseError('Network error: ' + err.message);
     } finally {
       setNewCaseLoading(false);

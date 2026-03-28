@@ -4,17 +4,122 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
 
+// Invite Client Modal Component
+function InviteClientModal({
+  visible,
+  onClose,
+  caseId,
+  inviteEmail,
+  setInviteEmail,
+  onSendInvite,
+  inviteLoading,
+  inviteError,
+  styles,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  caseId: string;
+  inviteEmail: string;
+  setInviteEmail: (email: string) => void;
+  onSendInvite: () => void;
+  inviteLoading: boolean;
+  inviteError: string;
+  styles: any;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Invite Client</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.modalCloseButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalForm}>
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Client Email Address</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Enter client email"
+                placeholderTextColor="#666666"
+                value={inviteEmail}
+                onChangeText={setInviteEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={!inviteLoading}
+              />
+            </View>
+
+            {inviteError ? <Text style={styles.formError}>{inviteError}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.createButton, inviteLoading && styles.createButtonDisabled]}
+              onPress={onSendInvite}
+              disabled={inviteLoading}
+            >
+              {inviteLoading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.createButtonText}>Send Invite</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ height: 40 }} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // Case Detail Screen Component
 function CaseDetailScreen({
   caseData,
   onBack,
   styles,
+  userToken,
+  showInviteModal,
+  setShowInviteModal,
+  inviteEmail,
+  setInviteEmail,
+  onSendInvite,
+  inviteLoading,
+  inviteError,
 }: {
   caseData: any;
   onBack: () => void;
   styles: any;
+  userToken: string | null;
+  showInviteModal: boolean;
+  setShowInviteModal: (show: boolean) => void;
+  inviteEmail: string;
+  setInviteEmail: (email: string) => void;
+  onSendInvite: () => void;
+  inviteLoading: boolean;
+  inviteError: string;
 }) {
   const [checklistItems, setChecklistItems] = useState<string[]>([]);
+  const [showAddItemInput, setShowAddItemInput] = useState(false);
+  const [newItemText, setNewItemText] = useState('');
+  const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
+
+  const handleAddChecklistItem = () => {
+    if (newItemText.trim()) {
+      setChecklistItems([...checklistItems, newItemText]);
+      setCheckedItems([...checkedItems, false]);
+      setNewItemText('');
+      setShowAddItemInput(false);
+      console.log('✅ Added checklist item:', newItemText);
+    }
+  };
+
+  const toggleChecklistItem = (index: number) => {
+    const updated = [...checkedItems];
+    updated[index] = !updated[index];
+    setCheckedItems(updated);
+  };
 
   // Guard against null/undefined caseData
   if (!caseData) {
@@ -78,18 +183,53 @@ function CaseDetailScreen({
         <View style={styles.detailSection}>
           <View style={styles.checklistHeader}>
             <Text style={styles.detailSectionTitle}>Checklist</Text>
-            <TouchableOpacity style={styles.addItemButton}>
-              <Text style={styles.addItemButtonText}>+ Add Item</Text>
+            <TouchableOpacity
+              style={styles.addItemButton}
+              onPress={() => {
+                setShowAddItemInput(!showAddItemInput);
+                setNewItemText('');
+              }}
+            >
+              <Text style={styles.addItemButtonText}>{showAddItemInput ? '✕ Cancel' : '+ Add Item'}</Text>
             </TouchableOpacity>
           </View>
 
-          {checklistItems.length === 0 ? (
+          {showAddItemInput && (
+            <View style={styles.addItemInputContainer}>
+              <TextInput
+                style={styles.addItemInput}
+                placeholder="Enter item name"
+                placeholderTextColor="#666666"
+                value={newItemText}
+                onChangeText={setNewItemText}
+                autoFocus
+              />
+              <TouchableOpacity
+                style={styles.addItemConfirmButton}
+                onPress={handleAddChecklistItem}
+              >
+                <Text style={styles.addItemConfirmButtonText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {checklistItems.length === 0 && !showAddItemInput ? (
             <Text style={styles.emptyChecklistText}>No checklist items yet</Text>
           ) : (
             checklistItems.map((item, index) => (
               <View key={index} style={styles.checklistItem}>
-                <CheckBox value={false} />
-                <Text style={styles.checklistItemText}>{item}</Text>
+                <CheckBox
+                  value={checkedItems[index] || false}
+                  onValueChange={() => toggleChecklistItem(index)}
+                />
+                <Text
+                  style={[
+                    styles.checklistItemText,
+                    checkedItems[index] && styles.checklistItemCompleted,
+                  ]}
+                >
+                  {item}
+                </Text>
               </View>
             ))
           )}
@@ -98,9 +238,28 @@ function CaseDetailScreen({
         <View style={{ height: 100 }} />
       </ScrollView>
 
+      {/* Invite Client Modal */}
+      <InviteClientModal
+        visible={showInviteModal}
+        onClose={() => {
+          setShowInviteModal(false);
+          setInviteEmail('');
+        }}
+        caseId={caseData?.id || ''}
+        inviteEmail={inviteEmail}
+        setInviteEmail={setInviteEmail}
+        onSendInvite={onSendInvite}
+        inviteLoading={inviteLoading}
+        inviteError={inviteError}
+        styles={styles}
+      />
+
       {/* Invite Client Button */}
       <View style={styles.detailBottomButton}>
-        <TouchableOpacity style={styles.inviteButton}>
+        <TouchableOpacity
+          style={styles.inviteButton}
+          onPress={() => setShowInviteModal(true)}
+        >
           <Text style={styles.inviteButtonText}>Invite Client</Text>
         </TouchableOpacity>
       </View>
@@ -259,6 +418,12 @@ export default function App() {
 
   // Case Detail State
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+
+  // Invite Client Modal State
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   // Initialize: Check for existing session and remembered email
   useEffect(() => {
@@ -578,6 +743,66 @@ export default function App() {
     setShowNewCaseForm(false);
   };
 
+  const handleSendInvite = async () => {
+    setInviteError('');
+
+    if (!inviteEmail.trim()) {
+      setInviteError('Please enter an email address');
+      return;
+    }
+
+    setInviteLoading(true);
+
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setInviteError('Not authenticated');
+        setInviteLoading(false);
+        return;
+      }
+
+      const caseId = selectedCaseId;
+      if (!caseId) {
+        setInviteError('No case selected');
+        setInviteLoading(false);
+        return;
+      }
+
+      console.log('📧 Sending invite to:', inviteEmail, 'for case:', caseId);
+
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseId}/invite`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ invitedEmail: inviteEmail }),
+        }
+      );
+
+      const data = await response.json();
+      console.log('📧 Invite response:', data);
+
+      if (response.ok) {
+        console.log('✅ Invite sent successfully');
+        alert(`✅ Invite sent to ${inviteEmail}!`);
+        setInviteEmail('');
+        setShowInviteModal(false);
+      } else {
+        const errorMessage = data.error || data.message || 'Failed to send invite';
+        console.error('❌ Invite error:', errorMessage);
+        setInviteError(errorMessage);
+      }
+    } catch (err: any) {
+      console.error('❌ Error sending invite:', err);
+      setInviteError('Network error: ' + err.message);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'open':
@@ -603,6 +828,14 @@ export default function App() {
             setSelectedCaseId(null);
           }}
           styles={styles}
+          userToken={userToken}
+          showInviteModal={showInviteModal}
+          setShowInviteModal={setShowInviteModal}
+          inviteEmail={inviteEmail}
+          setInviteEmail={setInviteEmail}
+          onSendInvite={handleSendInvite}
+          inviteLoading={inviteLoading}
+          inviteError={inviteError}
         />
       );
     } else {
@@ -1251,6 +1484,41 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginLeft: 12,
     flex: 1,
+  },
+  checklistItemCompleted: {
+    color: '#888888',
+    textDecorationLine: 'line-through',
+  },
+  addItemInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  addItemInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#ffffff',
+    backgroundColor: '#0a0a0a',
+  },
+  addItemConfirmButton: {
+    backgroundColor: '#22c55e',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  addItemConfirmButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   detailBottomButton: {
     paddingHorizontal: 24,

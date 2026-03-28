@@ -45,14 +45,18 @@ export default function App() {
         return;
       }
 
+      // Extract role and name with null safety
+      const role = data?.profile?.role || data?.user?.role || 'lawyer';
+      const name = data?.profile?.full_name || data?.user?.email || 'User';
+
       // Store token and role
       await AsyncStorage.setItem('userToken', data.session.access_token);
-      await AsyncStorage.setItem('userRole', data.profile.role);
+      await AsyncStorage.setItem('userRole', role);
 
       // Set success state
       setUserData({
-        full_name: data.profile.full_name,
-        role: data.profile.role,
+        full_name: name,
+        role: role,
       });
       setSuccess(true);
       setEmail('');

@@ -787,7 +787,7 @@ export default function App() {
 
       if (response.ok) {
         console.log('✅ Invite sent successfully');
-        alert(`✅ Invite sent to ${inviteEmail}!`);
+        alert(`✅ Invite sent! Link expires in 7 days`);
         setInviteEmail('');
         setShowInviteModal(false);
       } else {

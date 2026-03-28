@@ -537,10 +537,20 @@ function ClientPortalScreen({
                   {(caseData.status || 'active').toUpperCase()}
                 </Text>
               </View>
-              <View>
+              <View style={{ marginBottom: 16 }}>
                 <Text style={{ color: '#888888', fontSize: 12 }}>Your Lawyer</Text>
                 <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
-                  {caseData.lawyer_id ? 'John Von Schlichten' : 'Not assigned'}
+                  {caseData.lawyer?.full_name || 'Not assigned'}
+                </Text>
+              </View>
+              <View>
+                <Text style={{ color: '#888888', fontSize: 12 }}>Created</Text>
+                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
+                  {new Date(caseData.created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
                 </Text>
               </View>
             </View>
@@ -600,16 +610,35 @@ function ClientPortalScreen({
             )}
           </View>
 
-          {/* Messages Section Placeholder */}
+          {/* Contact Lawyer Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Messages</Text>
-            <View style={{ paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
-              <Text style={{ color: '#888888', fontSize: 14, marginBottom: 12 }}>
-                💬 Messaging coming soon
-              </Text>
-              <Text style={{ color: '#666666', fontSize: 12, textAlign: 'center' }}>
-                You'll be able to message your lawyer directly from here
-              </Text>
+            <Text style={styles.sectionTitle}>Contact Your Lawyer</Text>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#0066cc',
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+                onPress={() => {
+                  const email = caseData.lawyer?.email;
+                  if (email) {
+                    alert(`Email your lawyer at: ${email}`);
+                  }
+                }}
+              >
+                <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600' }}>
+                  📧 Email Lawyer
+                </Text>
+              </TouchableOpacity>
+              {caseData.lawyer?.email && (
+                <Text style={{ color: '#888888', fontSize: 12, textAlign: 'center' }}>
+                  {caseData.lawyer.email}
+                </Text>
+              )}
             </View>
           </View>
 
@@ -1264,7 +1293,7 @@ export default function App() {
                       {caseItem.docket_number ? ` • Docket: ${caseItem.docket_number}` : ''}
                     </Text>
                     <Text style={styles.caseDetails}>
-                      {caseItem.client_name ? `Client: ${caseItem.client_name}` : 'No client assigned'}
+                      {caseItem.client?.full_name ? `Client: ${caseItem.client.full_name}` : 'No client assigned'}
                     </Text>
                   </TouchableOpacity>
                 ))}

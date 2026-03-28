@@ -99,9 +99,15 @@ router.get('/', verifyJWT, async (req: Request, res: Response) => {
     const offsetNum = parseInt(offset as string);
 
     // Query cases where user is lawyer_id or client_id
+    // Join with profiles to get lawyer and client names
     let query = getSupabase()
       .from('cases')
-      .select('*', { count: 'exact' });
+      .select(
+        '*, ' +
+        'lawyer:profiles!cases_lawyer_id_fkey(id, full_name, email), ' +
+        'client:profiles!cases_client_id_fkey(id, full_name, email)',
+        { count: 'exact' }
+      );
 
     // Filter by user role (lawyer sees own cases, client sees assigned cases)
     query = query.or(`lawyer_id.eq.${userId},client_id.eq.${userId}`);

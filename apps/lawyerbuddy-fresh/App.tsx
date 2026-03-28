@@ -3,6 +3,160 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
+// 🌐 Translations
+const TRANSLATIONS = {
+  en: {
+    // Login & Auth
+    email: 'Email',
+    password: 'Password',
+    login: 'Login',
+    logout: 'Logout',
+    lawyerBuddy: 'LawyerBuddy',
+    tuAbogado: 'Tu Abogado',
+    dontHaveAccount: "Don't have an account?",
+    signUp: 'Sign up',
+    // Dashboard
+    myCases: 'My Cases',
+    myCase: 'My Case',
+    newCase: 'New Case',
+    noCase: 'No cases assigned yet',
+    noCases: 'No cases yet',
+    createFirstCase: 'Create your first case to get started',
+    good: 'Good',
+    morning: 'morning',
+    afternoon: 'afternoon',
+    evening: 'evening',
+    // Case Details
+    caseType: 'Case Type',
+    docketNumber: 'Docket',
+    status: 'Status',
+    active: 'Active',
+    client: 'Client',
+    noClient: 'No client assigned',
+    lawyer: 'Lawyer',
+    created: 'Created',
+    // Checklist
+    checklist: 'Checklist',
+    yourChecklist: 'Your Checklist',
+    noItems: 'No items yet',
+    addItem: 'Add Item',
+    itemsComplete: 'items complete',
+    // Messages
+    messages: 'Messages',
+    sendMessage: 'Send Message',
+    typeMessage: 'Type a message...',
+    noMessages: 'No messages yet',
+    // Documents
+    documents: 'Documents',
+    uploadDocument: 'Upload Document',
+    noDocuments: 'No documents yet',
+    // Court Dates
+    keyDates: 'Key Dates',
+    courtDates: 'Court Dates',
+    addDate: 'Add Date',
+    noDates: 'No key dates yet',
+    dateLabel: 'Date Label',
+    courtDate: 'Court Date',
+    fillingDeadline: 'Filing Deadline',
+    upcoming: 'Upcoming',
+    past: 'Past',
+    // Invite
+    inviteClient: 'Invite Client',
+    clientEmail: 'Client Email Address',
+    enterClientEmail: 'Enter client email',
+    sendInvite: 'Send Invite',
+    inviteSent: 'Invite sent!',
+    // Modals
+    newCaseTitle: 'New Case',
+    acceptInvite: 'Accept Invite',
+    createCase: 'Create Case',
+    caseTitlePlaceholder: 'Enter case title',
+    selectTemplate: 'Select Template (optional)',
+    fullName: 'Full Name',
+    createPassword: 'Create a password',
+    createAccount: 'Create Account & Accept',
+    cancel: 'Cancel',
+    // Button states
+    loading: 'Loading...',
+    saving: 'Saving...',
+  },
+  es: {
+    // Login & Auth
+    email: 'Correo Electrónico',
+    password: 'Contraseña',
+    login: 'Iniciar Sesión',
+    logout: 'Cerrar Sesión',
+    lawyerBuddy: 'LawyerBuddy',
+    tuAbogado: 'Tu Abogado',
+    dontHaveAccount: '¿No tienes cuenta?',
+    signUp: 'Regístrate',
+    // Dashboard
+    myCases: 'Mis Casos',
+    myCase: 'Mi Caso',
+    newCase: 'Nuevo Caso',
+    noCase: 'Aún no hay casos asignados',
+    noCases: 'Sin casos todavía',
+    createFirstCase: 'Crea tu primer caso para empezar',
+    good: 'Buenos',
+    morning: 'días',
+    afternoon: 'tardes',
+    evening: 'noches',
+    // Case Details
+    caseType: 'Tipo de Caso',
+    docketNumber: 'Expediente',
+    status: 'Estado',
+    active: 'Activo',
+    client: 'Cliente',
+    noClient: 'Sin cliente asignado',
+    lawyer: 'Abogado',
+    created: 'Creado',
+    // Checklist
+    checklist: 'Lista de Verificación',
+    yourChecklist: 'Tu Lista de Verificación',
+    noItems: 'Sin elementos todavía',
+    addItem: 'Agregar Elemento',
+    itemsComplete: 'elementos completados',
+    // Messages
+    messages: 'Mensajes',
+    sendMessage: 'Enviar Mensaje',
+    typeMessage: 'Escribe un mensaje...',
+    noMessages: 'Sin mensajes todavía',
+    // Documents
+    documents: 'Documentos',
+    uploadDocument: 'Subir Documento',
+    noDocuments: 'Sin documentos todavía',
+    // Court Dates
+    keyDates: 'Fechas Importantes',
+    courtDates: 'Fechas Judiciales',
+    addDate: 'Agregar Fecha',
+    noDates: 'Sin fechas importantes todavía',
+    dateLabel: 'Etiqueta de Fecha',
+    courtDate: 'Audiencia Judicial',
+    fillingDeadline: 'Plazo de Presentación',
+    upcoming: 'Próximamente',
+    past: 'Pasado',
+    // Invite
+    inviteClient: 'Invitar Cliente',
+    clientEmail: 'Correo del Cliente',
+    enterClientEmail: 'Ingresa correo del cliente',
+    sendInvite: 'Enviar Invitación',
+    inviteSent: '¡Invitación enviada!',
+    // Modals
+    newCaseTitle: 'Nuevo Caso',
+    acceptInvite: 'Aceptar Invitación',
+    createCase: 'Crear Caso',
+    caseTitlePlaceholder: 'Ingresa el título del caso',
+    selectTemplate: 'Selecciona Plantilla (opcional)',
+    fullName: 'Nombre Completo',
+    createPassword: 'Crea una contraseña',
+    createAccount: 'Crear Cuenta y Aceptar',
+    cancel: 'Cancelar',
+    // Button states
+    loading: 'Cargando...',
+    saving: 'Guardando...',
+  },
+};
+
 const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
 
 const CHECKLIST_TEMPLATES: Record<string, string[]> = {
@@ -1030,6 +1184,9 @@ function AcceptInviteScreen({
 }
 
 export default function App() {
+  const [language, setLanguage] = useState<'en' | 'es'>('en');
+  const t = TRANSLATIONS[language];
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1062,6 +1219,34 @@ export default function App() {
 
   // Deep Link State for Invites
   const [currentInviteToken, setCurrentInviteToken] = useState<string | null>(null);
+
+  // Messages State
+  const [messages, setMessages] = useState<any[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [messagesSendingId, setMessagesSendingId] = useState<string | null>(null);
+
+  // Documents State
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+
+  // Court Dates/Deadlines State
+  const [courtDates, setCourtDates] = useState<any[]>([]);
+  const [datesLoading, setDatesLoading] = useState(false);
+  const [showAddDateModal, setShowAddDateModal] = useState(false);
+  const [newDateLabel, setNewDateLabel] = useState('');
+  const [newDateValue, setNewDateValue] = useState('');
+  const [newDateSeverity, setNewDateSeverity] = useState<'low' | 'medium' | 'high'>('medium');
+
+  // Tab State for Case Detail
+  const [caseDetailTab, setCaseDetailTab] = useState<'checklist' | 'messages' | 'documents' | 'dates'>('checklist');
+
+  // Load language preference
+  useEffect(() => {
+    AsyncStorage.getItem('appLanguage').then((saved) => {
+      if (saved === 'es') setLanguage('es');
+    });
+  }, []);
 
   useEffect(() => {
     if (success && userData) {
@@ -1173,6 +1358,132 @@ export default function App() {
     }
 
     setChecklistProgress(progress);
+  };
+
+  const loadMessages = async (caseId: string, token: string) => {
+    try {
+      setMessagesLoading(true);
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/messages/${caseId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setMessages(data.messages || []);
+        console.log(`✅ Loaded ${data.messages?.length || 0} messages`);
+      }
+    } catch (err: any) {
+      console.error('Error loading messages:', err);
+    } finally {
+      setMessagesLoading(false);
+    }
+  };
+
+  const loadCourtDates = async (caseId: string, token: string) => {
+    try {
+      setDatesLoading(true);
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/events/${caseId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        const deadlines = (data.events || [])
+          .filter((e: any) => e.event_type === 'deadline')
+          .sort((a: any, b: any) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+        setCourtDates(deadlines);
+        console.log(`✅ Loaded ${deadlines.length} court dates`);
+      }
+    } catch (err: any) {
+      console.error('Error loading court dates:', err);
+    } finally {
+      setDatesLoading(false);
+    }
+  };
+
+  const sendMessage = async (caseId: string) => {
+    if (!newMessage.trim() || !userToken) return;
+
+    setMessagesSendingId('pending');
+    try {
+      const response = await fetch(
+        'https://lawyerbuddy-production.up.railway.app/messages',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            caseId,
+            content_encrypted: Buffer.from(newMessage).toString('base64'),
+            nonce: Buffer.from('nonce').toString('base64'),
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setMessages([...messages, data.message]);
+        setNewMessage('');
+        console.log('✅ Message sent');
+      }
+    } catch (err: any) {
+      console.error('Error sending message:', err);
+    } finally {
+      setMessagesSendingId(null);
+    }
+  };
+
+  const addCourtDate = async (caseId: string) => {
+    if (!newDateLabel.trim() || !newDateValue || !userToken) return;
+
+    try {
+      const response = await fetch(
+        'https://lawyerbuddy-production.up.railway.app/events',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            caseId,
+            title: newDateLabel,
+            eventType: 'deadline',
+            occurredAt: new Date(newDateValue).toISOString(),
+            narrative: newDateLabel,
+            severity: newDateSeverity,
+            privacyLevel: 'shared_with_lawyer',
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setCourtDates([...courtDates, data.event].sort((a, b) =>
+          new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()
+        ));
+        setNewDateLabel('');
+        setNewDateValue('');
+        setShowAddDateModal(false);
+        console.log('✅ Court date added');
+      }
+    } catch (err: any) {
+      console.error('Error adding court date:', err);
+    }
   };
 
   const handleCreateCase = async () => {
@@ -1643,24 +1954,46 @@ export default function App() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      {/* Language Toggle */}
+      <View style={styles.languageToggle}>
+        <TouchableOpacity
+          style={[styles.langButton, language === 'en' && styles.langButtonActive]}
+          onPress={() => {
+            setLanguage('en');
+            AsyncStorage.setItem('appLanguage', 'en');
+          }}
+        >
+          <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.langButton, language === 'es' && styles.langButtonActive]}
+          onPress={() => {
+            setLanguage('es');
+            AsyncStorage.setItem('appLanguage', 'es');
+          }}
+        >
+          <Text style={[styles.langText, language === 'es' && styles.langTextActive]}>ES</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.content}>
         {/* Logo */}
         <View style={styles.logoContainer}>
           <View style={styles.logoCircle}>
             <Text style={styles.logoInitials}>LB</Text>
           </View>
-          <Text style={styles.logoText}>LawyerBuddy</Text>
-          <Text style={styles.tagline}>Tu Abogado</Text>
+          <Text style={styles.logoText}>{t.lawyerBuddy}</Text>
+          <Text style={styles.tagline}>{t.tuAbogado}</Text>
         </View>
 
         {/* Form */}
         <View style={styles.formContainer}>
           {/* Email Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t.email}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your email"
+              placeholder={t.email}
               placeholderTextColor="#666666"
               value={email}
               onChangeText={setEmail}
@@ -1672,10 +2005,10 @@ export default function App() {
 
           {/* Password Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>{t.password}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your password"
+              placeholder={t.password}
               placeholderTextColor="#666666"
               value={password}
               onChangeText={setPassword}
@@ -1696,16 +2029,16 @@ export default function App() {
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.loginButtonText}>Login</Text>
+              <Text style={styles.loginButtonText}>{t.login}</Text>
             )}
           </TouchableOpacity>
         </View>
 
         {/* Sign Up Link */}
         <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>Don't have an account? </Text>
+          <Text style={styles.signupText}>{t.dontHaveAccount} </Text>
           <TouchableOpacity>
-            <Text style={styles.signupLink}>I'm a lawyer - Sign up</Text>
+            <Text style={styles.signupLink}>{t.signUp}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1768,6 +2101,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0a0a0a',
+  },
+  // Language Toggle
+  languageToggle: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 4,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  langButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+    backgroundColor: 'transparent',
+  },
+  langButtonActive: {
+    backgroundColor: '#0066cc',
+    borderColor: '#0066cc',
+  },
+  langText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#888888',
+    letterSpacing: 0.5,
+  },
+  langTextActive: {
+    color: '#ffffff',
   },
   // Login Screen Styles
   content: {

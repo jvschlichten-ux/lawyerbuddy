@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LawyerBuddy — Case Management for Modern Law Practices</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #0a0a0a;
+      color: #ffffff;
+      line-height: 1.6;
+    }
+
+    /* Header */
+    header {
+      padding: 24px;
+      border-bottom: 1px solid #1a1a1a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .logo-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #0066cc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .lang-toggle {
+      display: flex;
+      gap: 8px;
+    }
+
+    .lang-btn {
+      padding: 8px 12px;
+      border: 1px solid #333333;
+      border-radius: 6px;
+      background: transparent;
+      color: #888888;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .lang-btn.active {
+      background: #0066cc;
+      color: #ffffff;
+      border-color: #0066cc;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 24px;
+      text-align: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      letter-spacing: -1px;
+    }
+
+    .hero .tagline {
+      font-size: 20px;
+      color: #888888;
+      margin-bottom: 32px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-bottom: 48px;
+    }
+
+    .btn {
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+
+    .btn-primary {
+      background: #0066cc;
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background: #0052a3;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #0066cc;
+      border: 2px solid #0066cc;
+    }
+
+    .btn-secondary:hover {
+      background: #0066cc20;
+    }
+
+    /* Features Section */
+    .features {
+      padding: 80px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .features h2 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 48px;
+      text-align: center;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 32px;
+    }
+
+    .feature-card {
+      padding: 32px;
+      background: #1a1a1a;
+      border-radius: 12px;
+      border: 1px solid #333333;
+    }
+
+    .feature-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+    }
+
+    .feature-card h3 {
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      color: #888888;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    /* Signup Section */
+    .signup-section {
+      padding: 80px 24px;
+      background: #1a1a1a;
+      border-top: 1px solid #333333;
+      border-bottom: 1px solid #333333;
+    }
+
+    .signup-container {
+      max-width: 500px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .signup-container h2 {
+      font-size: 32px;
+      margin-bottom: 24px;
+    }
+
+    .signup-form {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .signup-form input {
+      flex: 1;
+      padding: 14px 18px;
+      background: #0a0a0a;
+      border: 1.5px solid #333333;
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 16px;
+    }
+
+    .signup-form input::placeholder {
+      color: #666666;
+    }
+
+    .signup-form button {
+      padding: 14px 24px;
+      background: #22c55e;
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .signup-form button:hover {
+      background: #16a34a;
+    }
+
+    .signup-text {
+      color: #888888;
+      font-size: 14px;
+    }
+
+    /* Footer */
+    footer {
+      padding: 24px;
+      text-align: center;
+      color: #666666;
+      font-size: 14px;
+      border-top: 1px solid #1a1a1a;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .hero .tagline {
+        font-size: 18px;
+      }
+
+      .hero-buttons {
+        flex-direction: column;
+      }
+
+      .features h2 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-circle">LB</div>
+      <span>LawyerBuddy</span>
+    </div>
+    <div class="lang-toggle">
+      <button class="lang-btn active" data-lang="en" onclick="setLanguage('en')">EN</button>
+      <button class="lang-btn" data-lang="es" onclick="setLanguage('es')">ES</button>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <h1 data-en="LawyerBuddy — Case Management Built for Modern Law Practices" data-es="LawyerBuddy — Gestión de Casos para Despachos Modernos">
+      LawyerBuddy — Case Management Built for Modern Law Practices
+    </h1>
+    <p class="tagline" data-en="Stop playing phone tag. Give your clients a clear path forward." data-es="Deja de jugar al tag telefónico. Dale a tus clientes un camino claro.">
+      Stop playing phone tag. Give your clients a clear path forward.
+    </p>
+    <div class="hero-buttons">
+      <button class="btn btn-primary" data-en="Download the App" data-es="Descargar la Aplicación">Download the App</button>
+      <button class="btn btn-secondary" data-en="Learn More" data-es="Más Información">Learn More</button>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features">
+    <h2 data-en="Why Lawyers Love LawyerBuddy" data-es="Por Qué los Abogados Aman LawyerBuddy">Why Lawyers Love LawyerBuddy</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚖️</div>
+        <h3 data-en="Case Management" data-es="Gestión de Casos">Case Management</h3>
+        <p data-en="Organize all case details, checklists, and deadlines in one place." data-es="Organiza todos los detalles del caso, listas de verificación y plazos en un solo lugar.">
+          Organize all case details, checklists, and deadlines in one place.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">💬</div>
+        <h3 data-en="Real-Time Communication" data-es="Comunicación en Tiempo Real">Real-Time Communication</h3>
+        <p data-en="Secure messaging with clients. No more email chains." data-es="Mensajería segura con clientes. No más cadenas de correos.">
+          Secure messaging with clients. No more email chains.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h3 data-en="Smart Checklists" data-es="Listas de Verificación Inteligentes">Smart Checklists</h3>
+        <p data-en="Use templates for common case types. Track progress instantly." data-es="Usa plantillas para tipos de casos comunes. Sigue el progreso al instante.">
+          Use templates for common case types. Track progress instantly.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📅</div>
+        <h3 data-en="Court Date Tracking" data-es="Seguimiento de Fechas Judiciales">Court Date Tracking</h3>
+        <p data-en="Never miss a deadline. Color-coded calendar and alerts." data-es="Nunca pierdas un plazo. Calendario codificado por colores y alertas.">
+          Never miss a deadline. Color-coded calendar and alerts.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📄</div>
+        <h3 data-en="Document Management" data-es="Gestión de Documentos">Document Management</h3>
+        <p data-en="Upload, organize, and share case files securely." data-es="Carga, organiza y comparte archivos de casos de forma segura.">
+          Upload, organize, and share case files securely.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🌐</div>
+        <h3 data-en="Bilingual Support" data-es="Soporte Bilingüe">Bilingual Support</h3>
+        <p data-en="Full English and Spanish interface for diverse client base." data-es="Interfaz completa en inglés y español para base de clientes diversa.">
+          Full English and Spanish interface for diverse client base.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Signup Section -->
+  <section class="signup-section">
+    <div class="signup-container">
+      <h2 data-en="Get Early Access" data-es="Obtén Acceso Temprano">Get Early Access</h2>
+      <form class="signup-form" onsubmit="handleSignup(event)">
+        <input
+          type="email"
+          placeholder="Enter your email"
+          data-en-placeholder="Enter your email"
+          data-es-placeholder="Ingresa tu correo"
+          required
+        />
+        <button type="submit" data-en="Join Now" data-es="Únete Ahora">Join Now</button>
+      </form>
+      <p class="signup-text" data-en="We'll notify you when LawyerBuddy is available in your region." data-es="Te notificaremos cuando LawyerBuddy esté disponible en tu región.">
+        We'll notify you when LawyerBuddy is available in your region.
+      </p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p data-en="© 2026 LawyerBuddy. All rights reserved." data-es="© 2026 LawyerBuddy. Todos los derechos reservados.">
+      © 2026 LawyerBuddy. All rights reserved.
+    </p>
+  </footer>
+
+  <script>
+    let currentLang = localStorage.getItem('siteLang') || 'en';
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem('siteLang', lang);
+      updatePageLanguage();
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+      });
+    }
+
+    function updatePageLanguage() {
+      document.querySelectorAll('[data-en]').forEach(el => {
+        if (el.hasAttribute('data-es')) {
+          el.textContent = el.getAttribute(`data-${currentLang}`);
+        }
+      });
+
+      document.querySelectorAll('[data-en-placeholder]').forEach(el => {
+        el.placeholder = el.getAttribute(`data-${currentLang}-placeholder`);
+      });
+    }
+
+    function handleSignup(e) {
+      e.preventDefault();
+      const email = e.target.querySelector('input[type="email"]').value;
+      alert(currentLang === 'en' ? `Thanks for signing up! We'll be in touch at ${email}` : `¡Gracias por registrarte! Nos comunicaremos en ${email}`);
+      e.target.reset();
+    }
+
+    // Initialize language
+    setLanguage(currentLang);
+  </script>
+</body>
+</html>

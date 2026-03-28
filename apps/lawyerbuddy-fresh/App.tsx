@@ -834,6 +834,7 @@ export default function App() {
   const [userData, setUserData] = useState<{ full_name: string; role: string } | null>(null);
   const [cases, setCases] = useState<any[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
+  const [checklistProgress, setChecklistProgress] = useState<Record<string, { total: number; completed: number }>>({});
   const [userToken, setUserToken] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -889,6 +890,11 @@ export default function App() {
       if (response.ok && data.cases) {
         setCases(data.cases);
         console.log('✅ Cases loaded successfully');
+
+        // Load checklist progress for each case
+        if (token) {
+          loadChecklistProgress(data.cases, token);
+        }
       } else {
         console.error('❌ Failed to fetch cases:', data);
         setCases([]);
@@ -899,6 +905,39 @@ export default function App() {
     } finally {
       setCasesLoading(false);
     }
+  };
+
+  const loadChecklistProgress = async (casesToLoad: any[], token: string) => {
+    const progress: Record<string, { total: number; completed: number }> = {};
+
+    for (const caseItem of casesToLoad) {
+      try {
+        const response = await fetch(
+          `https://lawyerbuddy-production.up.railway.app/cases/${caseItem.id}/checklist`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+        if (data.success && data.items) {
+          const items = data.items;
+          const completed = items.filter((item: any) => item.is_complete).length;
+          progress[caseItem.id] = {
+            total: items.length,
+            completed: completed,
+          };
+          console.log(`✅ Loaded checklist for case ${caseItem.id}: ${completed}/${items.length}`);
+        }
+      } catch (err: any) {
+        console.error(`⚠️  Failed to load checklist for case ${caseItem.id}:`, err);
+      }
+    }
+
+    setChecklistProgress(progress);
   };
 
   const handleCreateCase = async () => {
@@ -1295,6 +1334,11 @@ export default function App() {
                     <Text style={styles.caseDetails}>
                       {caseItem.client?.full_name ? `Client: ${caseItem.client.full_name}` : 'No client assigned'}
                     </Text>
+                    {checklistProgress[caseItem.id] && (
+                      <Text style={{ color: '#888888', fontSize: 13, marginTop: 8 }}>
+                        📋 {checklistProgress[caseItem.id].completed}/{checklistProgress[caseItem.id].total} items complete
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>

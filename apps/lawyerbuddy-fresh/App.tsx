@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -26,49 +26,74 @@ function InviteClientModal({
   inviteError: string;
   styles: any;
 }) {
+  const handleDismissKeyboard = () => {
+    Keyboard.dismiss();
+    onClose();
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Invite Client</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.modalCloseButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.modalForm}>
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Client Email Address</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="Enter client email"
-                placeholderTextColor="#666666"
-                value={inviteEmail}
-                onChangeText={setInviteEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                editable={!inviteLoading}
-              />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContent}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Invite Client</Text>
+              <TouchableOpacity onPress={handleDismissKeyboard}>
+                <Text style={styles.modalCloseButton}>✕</Text>
+              </TouchableOpacity>
             </View>
 
-            {inviteError ? <Text style={styles.formError}>{inviteError}</Text> : null}
+            <View style={styles.modalForm}>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Client Email Address</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Enter client email"
+                  placeholderTextColor="#666666"
+                  value={inviteEmail}
+                  onChangeText={setInviteEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  editable={!inviteLoading}
+                  returnKeyType="done"
+                  onSubmitEditing={onSendInvite}
+                />
+              </View>
 
-            <TouchableOpacity
-              style={[styles.createButton, inviteLoading && styles.createButtonDisabled]}
-              onPress={onSendInvite}
-              disabled={inviteLoading}
-            >
-              {inviteLoading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.createButtonText}>Send Invite</Text>
-              )}
-            </TouchableOpacity>
+              {inviteError ? <Text style={styles.formError}>{inviteError}</Text> : null}
 
-            <View style={{ height: 40 }} />
-          </View>
-        </View>
+              <View style={styles.inviteButtonRow}>
+                <TouchableOpacity
+                  style={[styles.inviteCancelButton, inviteLoading && styles.inviteCancelButtonDisabled]}
+                  onPress={handleDismissKeyboard}
+                  disabled={inviteLoading}
+                >
+                  <Text style={styles.inviteCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.inviteSendButton, inviteLoading && styles.inviteSendButtonDisabled]}
+                  onPress={onSendInvite}
+                  disabled={inviteLoading}
+                >
+                  {inviteLoading ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <Text style={styles.inviteSendButtonText}>Send Invite</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: 40 }} />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -1226,6 +1251,42 @@ const styles = StyleSheet.create({
   createButtonText: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#ffffff',
+  },
+  // Invite Modal Button Styles
+  inviteButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  inviteCancelButton: {
+    flex: 1,
+    backgroundColor: '#555555',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  inviteCancelButtonDisabled: {
+    opacity: 0.6,
+  },
+  inviteCancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  inviteSendButton: {
+    flex: 1,
+    backgroundColor: '#22c55e',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  inviteSendButtonDisabled: {
+    opacity: 0.6,
+  },
+  inviteSendButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#ffffff',
   },
   // Remember Me Checkbox

@@ -1,0 +1,556 @@
+================================================================================
+LAWYERBUDDY / TU ABOGADO — 10-PHASE DEVELOPMENT PROMPTS
+================================================================================
+Each prompt is delimited by ================================================================================
+Use with: ./run-phase.sh <phase-number>
+================================================================================
+
+================================================================================
+PHASE 1 — PROJECT SCAFFOLD
+================================================================================
+Create a new React Native + Expo monorepo project called "lawyerbuddy" with the following structure:
+
+/lawyerbuddy
+  /apps
+    /mobile          # React Native (Expo) — iOS + Android
+    /web             # React Native Web (same codebase, web target)
+  /packages
+    /shared          # Shared components, hooks, types, utilities
+    /i18n            # Internationalization (English + Spanish)
+    /api             # Supabase client, API calls, types
+    /security        # Encryption utilities, file hashing
+  /backend
+    /src
+      /routes        # Express route handlers
+      /middleware    # Auth, logging, RLS enforcement
+      /services      # Business logic (cases, events, users, exports)
+      /types         # Shared TypeScript types
+    server.ts
+  /supabase
+    /migrations      # SQL migration files
+    /seed            # Seed data for development
+  README.md
+  package.json       # Monorepo root (use pnpm workspaces)
+
+Tech stack:
+- Frontend: React Native + Expo SDK 51, React Native Web
+- Backend: Node.js + Express + TypeScript
+- Database: Supabase (PostgreSQL + Auth + Storage + Realtime)
+- Language: TypeScript throughout
+- Package manager: pnpm with workspaces
+
+Initialize all packages with TypeScript configs. Create a root README.md explaining the project structure. Do not add any feature code yet — scaffold only.
+
+================================================================================
+PHASE 2 — INTERNATIONALIZATION (i18n)
+================================================================================
+Set up internationalization in the /packages/i18n package for the LawyerBuddy app.
+
+Requirements:
+- Use react-i18next and i18next
+- Support two languages: English (en) and Spanish (es)
+- Auto-detect device language, default to English
+- Allow manual language switch saved to AsyncStorage
+- Create translation files for the following namespaces:
+  - common (buttons, labels, errors, navigation)
+  - auth (login, signup, invite, forgot password)
+  - client (event logging, case progress, documents, messaging)
+  - lawyer (dashboard, checklist builder, client management, annotations)
+  - legal (event categories, severity levels, legal factor tags)
+
+Populate the English and Spanish translation files with initial keys for all namespaces listed above. Use plain, non-legal language in the UI — for example "What happened?" not "Narrative Description", "Your case progress" not "Docket status", "Add an event" not "Create log entry".
+
+The Spanish translations should be natural Latin American Spanish appropriate for Mexico, Colombia, and Argentina — not Spain Spanish. The app name in English is "LawyerBuddy" and in Spanish is "Tu Abogado".
+
+Export a useTranslation hook wrapper and a LanguageSwitcher component.
+
+================================================================================
+PHASE 3 — SUPABASE SCHEMA + SECURITY
+================================================================================
+Create the complete Supabase database schema for the LawyerBuddy app. Generate SQL migration files in /supabase/migrations.
+
+Create the following tables with these exact fields:
+
+TABLE: profiles
+- id (uuid, references auth.users, primary key)
+- role (enum: 'client' | 'lawyer')
+- full_name (text)
+- email (text)
+- phone (text, nullable)
+- preferred_language (enum: 'en' | 'es', default 'en')
+- created_at (timestamptz, default now())
+- updated_at (timestamptz)
+
+TABLE: cases
+- id (uuid, primary key, default gen_random_uuid())
+- docket_number (text, nullable)
+- title (text)
+- case_type (text) -- e.g. 'custody', 'civil', 'compliance', 'other'
+- lawyer_id (uuid, references profiles)
+- client_id (uuid, references profiles)
+- jurisdiction (text, nullable)
+- status (enum: 'active' | 'closed' | 'archived', default 'active')
+- created_at (timestamptz, default now())
+- updated_at (timestamptz)
+
+TABLE: case_invites
+- id (uuid, primary key, default gen_random_uuid())
+- case_id (uuid, references cases)
+- lawyer_id (uuid, references profiles)
+- invited_email (text)
+- token (text, unique) -- secure random token for invite link
+- status (enum: 'pending' | 'accepted' | 'expired')
+- expires_at (timestamptz)
+- created_at (timestamptz, default now())
+
+TABLE: checklist_templates
+- id (uuid, primary key, default gen_random_uuid())
+- lawyer_id (uuid, references profiles)
+- name (text)
+- case_type (text)
+- steps (jsonb) -- array of {id, label, description, order}
+- created_at (timestamptz, default now())
+
+TABLE: checklist_items
+- id (uuid, primary key, default gen_random_uuid())
+- case_id (uuid, references cases)
+- label (text)
+- description (text, nullable)
+- order_index (integer)
+- is_complete (boolean, default false)
+- completed_at (timestamptz, nullable)
+- completed_by (uuid, references profiles, nullable)
+- created_at (timestamptz, default now())
+
+TABLE: events
+- id (uuid, primary key, default gen_random_uuid())
+- case_id (uuid, references cases)
+- client_id (uuid, references profiles)
+- title (text)
+- event_type (text) -- matches event category list
+- occurred_at (timestamptz) -- user-editable timestamp of when event happened
+- created_at (timestamptz, default now()) -- server-side, immutable
+- narrative (text)
+- location_description (text, nullable)
+- gps_lat (numeric, nullable)
+- gps_lng (numeric, nullable)
+- severity (enum: 'low' | 'medium' | 'high' | 'emergency', nullable)
+- is_recurring (boolean, default false)
+- court_order_reference (text, nullable)
+- actions_taken (text, nullable)
+- attorney_flag (boolean, default false)
+- attorney_note (text, nullable) -- privileged, excluded from court export
+- privacy_level (enum: 'private' | 'shared_with_lawyer' | 'court_export', default 'shared_with_lawyer')
+- related_event_ids (uuid[], nullable) -- pattern linking
+- legal_factor_tags (text[], nullable)
+- device_id (text, nullable)
+- updated_at (timestamptz)
+
+TABLE: event_attachments
+- id (uuid, primary key, default gen_random_uuid())
+- event_id (uuid, references events)
+- uploader_id (uuid, references profiles)
+- file_name (text)
+- file_type (text) -- 'photo' | 'video' | 'audio' | 'document' | 'screenshot'
+- storage_path (text) -- Supabase storage path
+- sha256_hash (text) -- integrity hash
+- file_size_bytes (bigint)
+- exif_metadata (jsonb, nullable) -- extracted EXIF for photos
+- created_at (timestamptz, default now())
+
+TABLE: messages
+- id (uuid, primary key, default gen_random_uuid())
+- case_id (uuid, references cases)
+- sender_id (uuid, references profiles)
+- content_encrypted (text) -- E2E encrypted content
+- is_read (boolean, default false)
+- created_at (timestamptz, default now())
+
+TABLE: audit_log
+- id (uuid, primary key, default gen_random_uuid())
+- actor_id (uuid, references profiles)
+- action (text) -- e.g. 'event.create', 'attachment.view', 'message.send', 'export.generate'
+- target_type (text) -- 'event' | 'case' | 'attachment' | 'message'
+- target_id (uuid)
+- metadata (jsonb, nullable) -- before/after for edits
+- created_at (timestamptz, default now())
+
+SECURITY RULES (Row Level Security):
+Enable RLS on ALL tables. Write policies so that:
+- Clients can only read/write their own data (their case, their events, their messages)
+- Lawyers can read/write only cases they are assigned to
+- The audit_log table is INSERT-only for all authenticated users — no UPDATE or DELETE ever
+- event_attachments follow the same access rules as their parent event
+- attorney_note field on events is readable only by the lawyer assigned to that case
+- No user can read another user's profile unless they share a case
+
+Also create a Supabase storage bucket called "case-files" set to PRIVATE (no public access).
+
+Generate all of this as numbered SQL migration files.
+
+================================================================================
+PHASE 4 — AUTHENTICATION + INVITE FLOW
+================================================================================
+Build the complete authentication and lawyer-invite flow for the LawyerBuddy app.
+
+SCREENS TO BUILD (in /packages/shared/screens/auth):
+
+1. WelcomeScreen
+   - App logo and name (LawyerBuddy / Tu Abogado)
+   - Two buttons: "I'm a client" and "I'm a lawyer"
+   - Language switcher (EN / ES) in top right corner
+   - Clean, professional design — large text, easy tap targets for all ages
+
+2. LoginScreen
+   - Email + password fields
+   - "Forgot password" link
+   - Login button
+   - Text: "New lawyer? Create an account" (link)
+   - Clients do NOT see a signup option here — they only join via invite link
+
+3. LawyerSignupScreen
+   - Full name, email, password, confirm password
+   - Bar number field (optional for MVP — labeled "Bar number (optional)")
+   - Terms of service checkbox
+   - Create account button
+
+4. ForgotPasswordScreen
+   - Email field
+   - Send reset link button
+
+5. InviteAcceptScreen
+   - Shown when client opens invite link from lawyer
+   - Displays: "Your lawyer [Lawyer Name] has invited you to join LawyerBuddy"
+   - Fields: Full name, email, password, confirm password
+   - On submit: creates client account, links to the case, redirects to client home
+
+BACKEND ROUTES to build in /backend/src/routes/auth.ts:
+- POST /auth/lawyer-signup
+- POST /auth/login
+- POST /auth/forgot-password
+- POST /auth/reset-password
+- GET  /auth/invite/:token  (validates token, returns lawyer name + case title)
+- POST /auth/invite/accept  (creates client account from invite)
+
+LAWYER INVITE FLOW in /backend/src/routes/cases.ts:
+- POST /cases/:id/invite  (lawyer sends invite — generates secure token, stores in case_invites, sends email)
+- The invite email should say: "[Lawyer Name] has invited you to track your case securely on LawyerBuddy. Click here to get started." — plain language, not legal jargon
+
+Use Supabase Auth for user creation. Use JWT middleware on all protected routes. Implement the invite token as a 32-byte cryptographically random hex string with a 7-day expiry.
+
+Style all screens to be accessible for users of all ages: minimum 16px font size, large tap targets (minimum 44px height), clear error messages in plain language.
+
+================================================================================
+PHASE 5 — CLIENT PORTAL
+================================================================================
+Build the complete client portal for the LawyerBuddy app in /packages/shared/screens/client.
+
+SCREENS:
+
+1. ClientHomeScreen
+   - Top section: "Your case progress" — shows checklist items from the lawyer, with completion status
+   - Each checklist item shows: label, description, complete/incomplete status
+   - Completed items show a checkmark and "Completed [date]"
+   - Incomplete items are grayed out — client cannot mark them complete (lawyer only)
+   - Middle section: Recent events — last 3 logged events with title, date, type badge
+   - Bottom nav: Home | Log Event | Documents | Messages
+
+2. EventListScreen
+   - Chronological list of all logged events for this case
+   - Each card shows: title, date, event type badge, severity indicator, attachment count
+   - Filter bar: All | Flagged | High severity
+   - Floating action button: "Add event"
+
+3. LogEventScreen (the most important screen)
+   Build as a multi-step form with one section per screen to avoid overwhelming users:
+
+   Step 1 — What happened
+   - Event title (text input) — placeholder: "Short description, e.g. Missed pickup April 3"
+   - Event type (dropdown/picker with these categories): Missed visitation, Court order violation, Communication incident, Medical event, Harassment, School/education event, Law enforcement involved, Financial issue, General observation, Other
+   - Date & time (date/time picker) — defaults to now, user can adjust
+   - Severity (segmented control): Low | Medium | High | Emergency
+   - "Next" button
+
+   Step 2 — Describe what happened
+   - Large text area labeled "What happened? Write only facts — who, what, when, where."
+   - Helper text below: "Stick to what you saw and heard. Avoid opinions or assumptions."
+   - Optional: Court order reference (text field) — "Which court order was affected? (optional)"
+   - Optional: Actions taken (text field) — "What did you do after this happened? (optional)"
+   - "Next" button
+
+   Step 3 — Location
+   - Auto-capture GPS (with permission prompt) — show as "Location captured" with coordinates
+   - Location description text field — "Where did this happen? (e.g. Child's school, Other parent's home)"
+   - "Next" button
+
+   Step 4 — Add evidence
+   - "Take a photo" button — opens camera directly (NOT photo library, to preserve EXIF)
+   - "Upload a document" button — opens file picker for PDFs, images
+   - "Record a voice memo" button — starts audio recording with timer
+   - Each attachment shows a thumbnail or file name with remove option
+   - Recording consent warning shown before audio recording starts: "Recording laws vary by state. Make sure you understand your local rules before recording others."
+   - "Next" button
+
+   Step 5 — Review & save
+   - Summary of all entered information
+   - Toggle: "Mark as important for my lawyer" (sets attorney_flag = true)
+   - "Save event" button
+   - On save: captures server-side timestamp, device ID, generates SHA-256 hashes for all attachments, saves to Supabase
+
+4. DocumentsScreen
+   - List of all attachments across all events for this case
+   - Grouped by event
+   - Tap to view (uses signed URL — expires in 10 minutes)
+
+5. ClientMessagesScreen
+   - Chat thread with their lawyer
+   - Messages displayed in chat bubble style
+   - Text input + send button at bottom
+   - Show read receipts
+   - Messages are encrypted before sending, decrypted on display
+
+All screens must:
+- Support English and Spanish via i18n translations
+- Have minimum 16px text
+- Have large, clearly labeled tap targets
+- Show loading states and error messages in plain language
+- Work on iOS, Android, and web
+
+================================================================================
+PHASE 6 — LAWYER PORTAL
+================================================================================
+Build the complete lawyer portal for the LawyerBuddy app in /packages/shared/screens/lawyer.
+
+SCREENS:
+
+1. LawyerDashboardScreen
+   - List of all active cases
+   - Each case card shows: client name, case type, last activity date, unread message count, number of unflagged attorney-flagged events
+   - Cases with new client activity are sorted to top
+   - "New case" button — creates a new case and generates an invite
+
+2. NewCaseScreen
+   - Case title (text)
+   - Case type (picker): Custody/Family, Civil, Compliance/Forms, Criminal Defense, Other
+   - Client email to invite
+   - Docket number (optional)
+   - Jurisdiction/state (optional)
+   - On submit: creates case record, generates invite token, sends invite email to client
+
+3. CaseDetailScreen (lawyer view of a specific case)
+   - Tab 1: Progress — editable checklist of steps
+   - Tab 2: Events — all events logged by client (with full detail)
+   - Tab 3: Documents — all attachments organized by event
+   - Tab 4: Messages — chat thread with client
+
+4. ChecklistBuilderScreen
+   - Shown within CaseDetailScreen > Progress tab
+   - Lawyer can add checklist items: label + optional description
+   - Drag to reorder items
+   - Toggle each item complete/incomplete — client sees this update in real time
+   - "Use template" button — loads a saved checklist template
+   - "Save as template" button — saves current checklist for reuse on future cases
+
+5. EventDetailScreen (lawyer view of a single client event)
+   - Full event details: title, type, date occurred, date logged, severity, narrative, location, GPS coordinates, attachments
+   - Attorney note field — visible only to lawyer, never exported to client or court export
+   - "Flag for hearing" toggle
+   - Legal factor tags (multi-select): Best interests of child, Parental fitness, Home stability, Financial stability, Health and safety, Educational needs, Emotional wellbeing, Co-parenting cooperation
+   - Exhibit number field (optional text)
+   - Audit trail section — shows all edits made to this event with timestamps
+
+6. LawyerMessagesScreen
+   - Same chat UI as client side
+   - Lawyer can message any of their clients
+   - Client selector if viewing from dashboard (not from within a case)
+
+7. ExportScreen (Phase 3 — placeholder for MVP)
+   - Show a "Coming soon" message for now
+   - Note: This will generate a PDF court export organized by legal factor, date, or category
+   - Important note visible to lawyer: "Attorney notes and private flags are never included in court exports."
+
+All screens must support English and Spanish via i18n. Professional tone — lawyers are the primary users here, so the language can be slightly more formal than the client side, but still plain and clear.
+
+================================================================================
+PHASE 7 — SECURITY IMPLEMENTATION
+================================================================================
+Implement the security layer for the LawyerBuddy app in /packages/security.
+
+1. FILE HASHING
+Create a utility function generateFileHash(fileUri: string): Promise<string> that:
+- Reads a file from a local URI
+- Generates a SHA-256 hash of the file contents
+- Returns the hex-encoded hash string
+- Works on both React Native and web
+
+2. EXIF EXTRACTION
+Create a utility extractExif(fileUri: string): Promise<ExifData | null> that:
+- Extracts EXIF metadata from a photo taken in-app
+- Returns: { timestamp, gps_lat, gps_lng, device_make, device_model, orientation }
+- Returns null if no EXIF data found (e.g. for screenshots)
+- Uses expo-image-picker's built-in EXIF support
+
+3. END-TO-END MESSAGE ENCRYPTION
+Create encryption utilities for secure messaging:
+- generateKeyPair(): generates a public/private key pair for a user (store private key in SecureStore on device, upload public key to profiles table)
+- encryptMessage(content: string, recipientPublicKey: string): Promise<string> — encrypts message content
+- decryptMessage(encryptedContent: string, privateKey: string): Promise<string> — decrypts on device
+- Use libsodium-wrappers (box encryption)
+- Private keys NEVER leave the device and are NEVER sent to the server
+
+4. SECURE FILE ACCESS
+Create a utility getSignedUrl(storagePath: string): Promise<string> that:
+- Calls Supabase Storage to generate a signed URL
+- URL expires in 600 seconds (10 minutes)
+- Logs the file access to the audit_log table automatically
+
+5. AUDIT LOGGING
+Create a utility logAction(action: string, targetType: string, targetId: string, metadata?: object): Promise<void> that:
+- Inserts a row into the audit_log table
+- Includes the current user's ID and the current timestamp
+- Is called automatically on: event create, event edit, attachment view, message send, export generate, login, logout
+- Never throws — wraps in try/catch and fails silently to avoid blocking the user
+
+6. BACKEND MIDDLEWARE
+In /backend/src/middleware/auth.ts:
+- Verify JWT on every protected route
+- Attach user profile (including role) to request object
+- Reject expired or invalid tokens with 401
+
+In /backend/src/middleware/rls.ts:
+- Before any data operation, verify the requesting user has access to the requested case_id
+- Lawyers: must be assigned to the case
+- Clients: must be the client on the case
+- Reject unauthorized access with 403 and log the attempt to audit_log
+
+Document each security function with a JSDoc comment explaining what it does and why it matters legally.
+
+================================================================================
+PHASE 8 — BACKEND API ROUTES
+================================================================================
+Build the complete Express REST API in /backend/src/routes.
+
+CASES
+- GET    /cases                    — list all cases for the authenticated user (role-aware)
+- POST   /cases                    — create new case (lawyer only)
+- GET    /cases/:id                — get case detail
+- PATCH  /cases/:id                — update case (lawyer only)
+- POST   /cases/:id/invite         — send client invite email
+
+CHECKLIST
+- GET    /cases/:id/checklist      — get all checklist items for a case
+- POST   /cases/:id/checklist      — add checklist item (lawyer only)
+- PATCH  /cases/:id/checklist/:itemId — mark complete/incomplete (lawyer only)
+- DELETE /cases/:id/checklist/:itemId — remove item (lawyer only)
+
+EVENTS
+- GET    /cases/:id/events         — list all events for a case
+- POST   /cases/:id/events         — create new event (client only)
+- GET    /cases/:id/events/:eventId — get single event detail
+- PATCH  /cases/:id/events/:eventId — edit event (logs change to audit trail, never overwrites)
+- GET    /cases/:id/events/:eventId/audit — get audit trail for an event
+
+ATTACHMENTS
+- POST   /cases/:id/events/:eventId/attachments — upload attachment (generates hash, stores metadata)
+- GET    /cases/:id/events/:eventId/attachments/:attachmentId — get signed URL for file
+- DELETE /cases/:id/events/:eventId/attachments/:attachmentId — remove attachment
+
+MESSAGES
+- GET    /cases/:id/messages       — get message history (paginated, last 50)
+- POST   /cases/:id/messages       — send encrypted message
+- PATCH  /cases/:id/messages/read  — mark messages as read
+
+AUDIT
+- GET    /cases/:id/audit          — get full case audit log (lawyer only)
+
+All routes must:
+- Require authentication (JWT middleware)
+- Enforce role-based access (RLS middleware)
+- Log all actions to audit_log
+- Return consistent JSON: { success: boolean, data?: any, error?: string }
+- Handle errors gracefully with appropriate HTTP status codes
+
+================================================================================
+PHASE 9 — NAVIGATION + APP SHELL
+================================================================================
+Build the navigation structure and app shell for the LawyerBuddy React Native + Expo app.
+
+Use React Navigation 6 with:
+- Stack navigator for auth flow
+- Bottom tab navigator for client portal
+- Bottom tab navigator for lawyer portal
+- Role-based routing: after login, route to client or lawyer portal based on profile.role
+
+AUTH STACK (shown when not logged in):
+  Welcome → Login
+  Welcome → LawyerSignup
+  Login → ForgotPassword
+  InviteAccept (deep link: lawyerbuddy://invite/:token)
+
+CLIENT TAB NAVIGATOR:
+  Tab 1: Home (ClientHomeScreen) — icon: home
+  Tab 2: Events (EventListScreen) — icon: calendar
+  Tab 3: Documents (DocumentsScreen) — icon: folder
+  Tab 4: Messages (ClientMessagesScreen) — icon: chat bubble
+
+LAWYER TAB NAVIGATOR:
+  Tab 1: Cases (LawyerDashboardScreen) — icon: briefcase
+  Tab 2: Messages (LawyerMessagesScreen) — icon: chat bubble
+
+DEEP LINKING:
+Configure Expo deep linking so that lawyerbuddy://invite/:token opens the InviteAcceptScreen with the token pre-filled.
+
+APP SHELL:
+- Show a splash screen while checking auth state
+- Show a loading spinner while fetching initial data
+- Handle token refresh transparently
+- Show a global error toast for network errors
+- Show a "No internet connection" banner when offline
+
+HEADER:
+- Show the language switcher (EN / ES) on auth screens
+- Show the case name in the header when inside a case
+- Show the user's name and a logout option in a menu
+
+All tab labels must use i18n translations. Tab icons must use @expo/vector-icons.
+
+================================================================================
+PHASE 10 — REAL-TIME + NOTIFICATIONS
+================================================================================
+Set up real-time updates and push notifications for the LawyerBuddy app.
+
+REAL-TIME (using Supabase Realtime):
+
+1. In ClientHomeScreen: subscribe to changes in checklist_items for the client's case.
+   When the lawyer marks an item complete, the client's progress view updates instantly without refresh.
+
+2. In ClientMessagesScreen and LawyerMessagesScreen: subscribe to new messages for the current case.
+   New messages appear in the chat in real time.
+
+3. In LawyerDashboardScreen: subscribe to new events created by clients.
+   The case card shows a "New activity" badge when a client logs a new event.
+
+Create a custom hook useRealtimeSubscription(table, filter, callback) in /packages/shared/hooks that:
+- Sets up a Supabase Realtime subscription
+- Automatically unsubscribes on component unmount
+- Handles reconnection on network loss
+
+PUSH NOTIFICATIONS (using Expo Push Notifications):
+
+Set up push notification infrastructure:
+- Register device token on login and store in profiles table (new column: expo_push_token)
+- Create a notification service in /backend/src/services/notifications.ts
+
+Send push notifications in these scenarios:
+1. Client receives a message from their lawyer → "New message from [Lawyer Name]"
+2. Lawyer receives a message from a client → "New message from [Client Name] about [Case Title]"
+3. Lawyer marks a checklist item complete → client receives "Your lawyer updated your case progress"
+4. Client logs a new event → lawyer receives "[Client Name] logged a new event: [Event Title]"
+
+Notification copy must be available in English and Spanish — check the user's preferred_language field before sending.
+
+All notifications must be sent via Expo's push notification service (https://exp.host/--/api/v2/push/send) from the backend, never from the client directly.
+
+================================================================================
+END OF PROMPTS
+================================================================================

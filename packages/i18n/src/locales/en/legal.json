@@ -1,0 +1,54 @@
+{
+  "event_categories": {
+    "missed_visitation": "Missed visitation",
+    "court_order_violation": "Court order violation",
+    "communication_incident": "Communication incident",
+    "medical_event": "Medical event",
+    "harassment": "Harassment",
+    "school_event": "School/education event",
+    "law_enforcement": "Law enforcement involved",
+    "financial_issue": "Financial issue",
+    "general_observation": "General observation",
+    "other": "Other"
+  },
+  "severity_levels": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "emergency": "Emergency"
+  },
+  "legal_factors": {
+    "best_interests_of_child": "Best interests of child",
+    "parental_fitness": "Parental fitness",
+    "home_stability": "Home stability",
+    "financial_stability": "Financial stability",
+    "health_and_safety": "Health and safety",
+    "educational_needs": "Educational needs",
+    "emotional_wellbeing": "Emotional wellbeing",
+    "coparenting_cooperation": "Co-parenting cooperation"
+  },
+  "attachment_types": {
+    "photo": "Photo",
+    "video": "Video",
+    "audio": "Audio",
+    "document": "Document",
+    "screenshot": "Screenshot"
+  },
+  "case_types": {
+    "custody": "Custody/Family",
+    "civil": "Civil",
+    "compliance": "Compliance/Forms",
+    "criminal": "Criminal Defense",
+    "other": "Other"
+  },
+  "case_status": {
+    "active": "Active",
+    "closed": "Closed",
+    "archived": "Archived"
+  },
+  "privacy_levels": {
+    "private": "Private",
+    "shared_with_lawyer": "Shared with lawyer",
+    "court_export": "Include in court export"
+  }
+}

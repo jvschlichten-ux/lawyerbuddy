@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "LawyerBuddy",
+    "slug": "lawyerbuddy",
+    "version": "1.0.0",
+    "assetBracketsUploadPrefix": "expo/",
+    "scheme": "lawyerbuddy",
+    "plugins": [],
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "supportsTabletMode": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "LawyerBuddy needs location access to document incidents accurately",
+        "NSCameraUsageDescription": "LawyerBuddy needs camera access to capture incident documentation",
+        "NSPhotoLibraryUsageDescription": "LawyerBuddy needs photo library access"
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": {
+            "scheme": "lawyerbuddy",
+            "host": "*"
+          },
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "description": "End-to-end encrypted case management for lawyers and clients",
+    "primaryColor": "#0066CC"
+  }
+}

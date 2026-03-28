@@ -1,0 +1,33 @@
+{
+  "tasks": {
+    "task-1774666397223-4z9no0": {
+      "taskId": "task-1774666397223-4z9no0",
+      "type": "implementation",
+      "description": "Phase 1: Scaffold the LawyerBuddy project",
+      "priority": "normal",
+      "status": "pending",
+      "progress": 0,
+      "assignedTo": [],
+      "tags": [],
+      "createdAt": "2026-03-28T02:53:17.223Z",
+      "startedAt": null,
+      "completedAt": null
+    },
+    "task-1774666710637-fq0vo7": {
+      "taskId": "task-1774666710637-fq0vo7",
+      "type": "implementation",
+      "description": "Phase 1: Create a new React Native + Expo monorepo project called \"lawyerbuddy\" with the following structure:",
+      "priority": "normal",
+      "status": "in_progress",
+      "progress": 0,
+      "assignedTo": [
+        "agent-1774666710881-xhvlv7"
+      ],
+      "tags": [],
+      "createdAt": "2026-03-28T02:58:30.637Z",
+      "startedAt": "2026-03-28T02:58:31.115Z",
+      "completedAt": null
+    }
+  },
+  "version": "3.0.0"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@lawyerbuddy/security",
+  "version": "1.0.0",
+  "description": "Encryption utilities and file hashing",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "expo-crypto": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.9.2"
+  }
+}

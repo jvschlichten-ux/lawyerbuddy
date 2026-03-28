@@ -1,0 +1,3 @@
+# Seed data directory for development
+# SQL files in this directory will be run during local development
+# Never commit sensitive seed data to version control

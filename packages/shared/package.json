@@ -1,0 +1,21 @@
+{
+  "name": "@lawyerbuddy/shared",
+  "version": "1.0.0",
+  "description": "Shared components, hooks, types, and utilities",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-native": "^0.73.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-native": "^0.73.0",
+    "typescript": "^5.9.2"
+  }
+}

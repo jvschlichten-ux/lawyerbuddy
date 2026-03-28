@@ -1,0 +1,72 @@
+{
+  "workflows": {
+    "workflow-1774666938493-98jdpl": {
+      "workflowId": "workflow-1774666938493-98jdpl",
+      "name": "custom workflow",
+      "steps": [
+        {
+          "stepId": "step-1",
+          "name": "Execute",
+          "type": "task",
+          "config": {
+            "task": "Execute"
+          },
+          "status": "pending"
+        }
+      ],
+      "status": "running",
+      "currentStep": 0,
+      "variables": {
+        "template": "custom"
+      },
+      "createdAt": "2026-03-28T03:02:18.493Z",
+      "startedAt": "2026-03-28T03:02:18.493Z"
+    },
+    "workflow-1774666945864-t85qfg": {
+      "workflowId": "workflow-1774666945864-t85qfg",
+      "name": "custom workflow",
+      "steps": [
+        {
+          "stepId": "step-1",
+          "name": "Execute",
+          "type": "task",
+          "config": {
+            "task": "Execute"
+          },
+          "status": "pending"
+        }
+      ],
+      "status": "running",
+      "currentStep": 0,
+      "variables": {
+        "template": "custom"
+      },
+      "createdAt": "2026-03-28T03:02:25.864Z",
+      "startedAt": "2026-03-28T03:02:25.864Z"
+    },
+    "workflow-1774666953597-2pcvd7": {
+      "workflowId": "workflow-1774666953597-2pcvd7",
+      "name": "custom workflow",
+      "steps": [
+        {
+          "stepId": "step-1",
+          "name": "Execute",
+          "type": "task",
+          "config": {
+            "task": "Execute"
+          },
+          "status": "pending"
+        }
+      ],
+      "status": "running",
+      "currentStep": 0,
+      "variables": {
+        "template": "custom"
+      },
+      "createdAt": "2026-03-28T03:02:33.597Z",
+      "startedAt": "2026-03-28T03:02:33.597Z"
+    }
+  },
+  "templates": {},
+  "version": "3.0.0"
+}

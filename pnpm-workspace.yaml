@@ -1,0 +1,8 @@
+packages:
+  - 'apps/mobile'
+  - 'apps/web'
+  - 'packages/shared'
+  - 'packages/i18n'
+  - 'packages/api'
+  - 'packages/security'
+  - 'backend'

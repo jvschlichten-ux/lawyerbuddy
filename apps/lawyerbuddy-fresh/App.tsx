@@ -1,8 +1,97 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, CheckBox } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
+
+// Case Detail Screen Component
+function CaseDetailScreen({
+  caseData,
+  onBack,
+  styles,
+}: {
+  caseData: any;
+  onBack: () => void;
+  styles: any;
+}) {
+  const [checklistItems, setChecklistItems] = useState<string[]>([]);
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.detailHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.detailTitle}>{caseData.title}</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <ScrollView style={styles.detailContent} showsVerticalScrollIndicator={false}>
+        {/* Case Information */}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailSectionTitle}>Case Information</Text>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Case Type:</Text>
+            <Text style={styles.detailValue}>{caseData.case_type || 'General Law'}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Status:</Text>
+            <Text style={[styles.detailValue, { color: '#22c55e' }]}>
+              {(caseData.status || 'active').toUpperCase()}
+            </Text>
+          </View>
+
+          {caseData.docket_number && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Docket Number:</Text>
+              <Text style={styles.detailValue}>{caseData.docket_number}</Text>
+            </View>
+          )}
+
+          {caseData.client_name && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Client:</Text>
+              <Text style={styles.detailValue}>{caseData.client_name}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Checklist Section */}
+        <View style={styles.detailSection}>
+          <View style={styles.checklistHeader}>
+            <Text style={styles.detailSectionTitle}>Checklist</Text>
+            <TouchableOpacity style={styles.addItemButton}>
+              <Text style={styles.addItemButtonText}>+ Add Item</Text>
+            </TouchableOpacity>
+          </View>
+
+          {checklistItems.length === 0 ? (
+            <Text style={styles.emptyChecklistText}>No checklist items yet</Text>
+          ) : (
+            checklistItems.map((item, index) => (
+              <View key={index} style={styles.checklistItem}>
+                <CheckBox value={false} />
+                <Text style={styles.checklistItemText}>{item}</Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* Invite Client Button */}
+      <View style={styles.detailBottomButton}>
+        <TouchableOpacity style={styles.inviteButton}>
+          <Text style={styles.inviteButtonText}>Invite Client</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
 // Separate New Case Modal Component
 function NewCaseModal({
@@ -135,6 +224,7 @@ function NewCaseModal({
 export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -142,6 +232,7 @@ export default function App() {
   const [cases, setCases] = useState<any[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
   const [userToken, setUserToken] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   // New Case Form State
   const [showNewCaseForm, setShowNewCaseForm] = useState(false);
@@ -153,6 +244,64 @@ export default function App() {
 
   // Case Detail State
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+
+  // Initialize: Check for existing session and remembered email
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // Load remembered email
+        const rememberedEmail = await AsyncStorage.getItem('rememberedEmail');
+        if (rememberedEmail) {
+          setEmail(rememberedEmail);
+        }
+
+        // Check for existing token and auto-login
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          console.log('🔐 Found existing token, attempting auto-login...');
+          setUserToken(token);
+
+          // Try to fetch user data to verify token is still valid
+          try {
+            const response = await fetch('https://lawyerbuddy-production.up.railway.app/profile', {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              const role = data?.profile?.role || data?.user?.role || 'lawyer';
+              const name = data?.profile?.full_name || data?.user?.email || 'User';
+
+              setUserData({
+                full_name: name,
+                role: role,
+              });
+              setSuccess(true);
+              console.log('✅ Auto-login successful');
+            } else {
+              console.log('Token expired or invalid');
+              await AsyncStorage.removeItem('userToken');
+              await AsyncStorage.removeItem('userRole');
+            }
+          } catch (err) {
+            console.error('Error verifying token:', err);
+            await AsyncStorage.removeItem('userToken');
+            await AsyncStorage.removeItem('userRole');
+          }
+        }
+      } catch (err) {
+        console.error('Error during app initialization:', err);
+      } finally {
+        setCheckingSession(false);
+      }
+    };
+
+    initializeApp();
+  }, []);
 
   useEffect(() => {
     if (success && userData) {
@@ -311,6 +460,13 @@ export default function App() {
       await AsyncStorage.setItem('userToken', data.session.access_token);
       await AsyncStorage.setItem('userRole', role);
 
+      // Store email if Remember Me is checked
+      if (rememberMe) {
+        await AsyncStorage.setItem('rememberedEmail', email);
+      } else {
+        await AsyncStorage.removeItem('rememberedEmail');
+      }
+
       // Set success state
       setUserData({
         full_name: name,
@@ -319,6 +475,7 @@ export default function App() {
       setSuccess(true);
       setEmail('');
       setPassword('');
+      setRememberMe(false);
     } catch (error: any) {
       console.error('Network error:', error);
       console.error('Error type:', error.name);
@@ -351,6 +508,20 @@ export default function App() {
         return '#0066cc';
     }
   };
+
+  // Case Detail Screen
+  if (success && userData && selectedCaseId) {
+    const selectedCase = cases.find((c) => c.id === selectedCaseId);
+    if (selectedCase) {
+      return (
+        <CaseDetailScreen
+          caseData={selectedCase}
+          onBack={() => setSelectedCaseId(null)}
+          styles={styles}
+        />
+      );
+    }
+  }
 
   // Lawyer Dashboard Screen
   if (success && userData) {
@@ -400,9 +571,8 @@ export default function App() {
                     key={index}
                     style={styles.caseCard}
                     onPress={() => {
-                      console.log('📂 Tapped case:', caseItem.id, caseItem.title);
+                      console.log('📂 Navigating to case detail:', caseItem.id, caseItem.title);
                       setSelectedCaseId(caseItem.id);
-                      // TODO: Navigate to case detail screen
                     }}
                     activeOpacity={0.7}
                   >
@@ -453,6 +623,16 @@ export default function App() {
     );
   }
 
+  // Loading Screen (while checking for existing session)
+  if (checkingSession) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#0066cc" />
+        <Text style={styles.loadingSessionText}>Loading...</Text>
+      </View>
+    );
+  }
+
   // Login Screen
   return (
     <KeyboardAvoidingView
@@ -497,6 +677,17 @@ export default function App() {
             />
           </View>
 
+          {/* Remember Me Checkbox */}
+          <View style={styles.rememberMeContainer}>
+            <CheckBox
+              value={rememberMe}
+              onValueChange={setRememberMe}
+              disabled={loading}
+              tintColors={{ true: '#0066cc', false: '#666666' }}
+            />
+            <Text style={styles.rememberMeText}>Remember me</Text>
+          </View>
+
           {/* Error Message */}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -537,6 +728,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0a0a0a',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // Login Screen Styles
   content: {
@@ -844,6 +1039,138 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   createButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  // Remember Me Checkbox
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: -12,
+    marginBottom: 16,
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: '#888888',
+    marginLeft: 8,
+  },
+  // Loading Session
+  loadingSessionText: {
+    fontSize: 16,
+    color: '#888888',
+    marginTop: 16,
+  },
+  // Case Detail Screen
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+  },
+  backButton: {
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0066cc',
+  },
+  detailTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  detailContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  detailSection: {
+    marginBottom: 32,
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#888888',
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#ffffff',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 16,
+  },
+  checklistHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addItemButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#0066cc',
+  },
+  addItemButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  emptyChecklistText: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
+  checklistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+  },
+  checklistItemText: {
+    fontSize: 14,
+    color: '#ffffff',
+    marginLeft: 12,
+    flex: 1,
+  },
+  detailBottomButton: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    paddingTop: 12,
+  },
+  inviteButton: {
+    backgroundColor: '#0066cc',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  inviteButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',

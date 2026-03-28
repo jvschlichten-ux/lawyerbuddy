@@ -541,11 +541,44 @@ function CaseDetailScreen({
               style={[styles.detailTab, caseDetailTab === tab && styles.detailTabActive]}
               onPress={() => {
                 setCaseDetailTab(tab as any);
-                if (tab === 'messages' && messages.length === 0 && userToken) {
-                  loadMessages(caseData?.id, userToken);
+                // Load messages on demand
+                if (tab === 'messages' && messages.length === 0 && userToken && caseData?.id) {
+                  fetch(
+                    `https://lawyerbuddy-production.up.railway.app/messages/${caseData.id}`,
+                    {
+                      method: 'GET',
+                      headers: {
+                        'Authorization': `Bearer ${userToken}`,
+                      },
+                    }
+                  )
+                    .then((r) => r.json())
+                    .then((d) => {
+                      if (d.success) setMessages(d.messages || []);
+                    })
+                    .catch((e) => console.error('Error loading messages:', e));
                 }
-                if (tab === 'dates' && courtDates.length === 0 && userToken) {
-                  loadCourtDates(caseData?.id, userToken);
+                // Load court dates on demand
+                if (tab === 'dates' && courtDates.length === 0 && userToken && caseData?.id) {
+                  fetch(
+                    `https://lawyerbuddy-production.up.railway.app/events/${caseData.id}`,
+                    {
+                      method: 'GET',
+                      headers: {
+                        'Authorization': `Bearer ${userToken}`,
+                      },
+                    }
+                  )
+                    .then((r) => r.json())
+                    .then((d) => {
+                      if (d.success) {
+                        const dates = (d.events || [])
+                          .filter((e: any) => e.event_type === 'deadline')
+                          .sort((a: any, b: any) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+                        setCourtDates(dates);
+                      }
+                    })
+                    .catch((e) => console.error('Error loading dates:', e));
                 }
               }}
             >
@@ -2295,30 +2328,36 @@ const styles = StyleSheet.create({
   // Language Toggle
   languageToggle: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingBottom: 12,
     alignItems: 'center',
     justifyContent: 'flex-end',
+    backgroundColor: '#0a0a0a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+    zIndex: 100,
   },
   langButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#333333',
-    backgroundColor: 'transparent',
+    backgroundColor: '#1a1a1a',
+    minWidth: 50,
+    alignItems: 'center',
   },
   langButtonActive: {
     backgroundColor: '#0066cc',
     borderColor: '#0066cc',
   },
   langText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: '#888888',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   langTextActive: {
     color: '#ffffff',

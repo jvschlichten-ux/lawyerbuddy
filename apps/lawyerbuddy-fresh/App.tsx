@@ -4,6 +4,134 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
 
+// Separate New Case Modal Component
+function NewCaseModal({
+  visible,
+  onClose,
+  onCreateCase,
+  newCaseTitle,
+  setNewCaseTitle,
+  newCaseType,
+  setNewCaseType,
+  newCaseDocket,
+  setNewCaseDocket,
+  newCaseLoading,
+  newCaseError,
+  styles,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreateCase: () => void;
+  newCaseTitle: string;
+  setNewCaseTitle: (title: string) => void;
+  newCaseType: string;
+  setNewCaseType: (type: string) => void;
+  newCaseDocket: string;
+  setNewCaseDocket: (docket: string) => void;
+  newCaseLoading: boolean;
+  newCaseError: string;
+  styles: any;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>New Case</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.modalCloseButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.modalForm}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Case Title */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Case Title *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Enter case title"
+                placeholderTextColor="#666666"
+                value={newCaseTitle}
+                onChangeText={setNewCaseTitle}
+                editable={!newCaseLoading}
+                autoFocus={false}
+              />
+            </View>
+
+            {/* Case Type */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Case Type *</Text>
+              <View style={styles.caseTypePicker}>
+                {CASE_TYPES.map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.caseTypeOption,
+                      newCaseType === type && styles.caseTypeOptionSelected,
+                    ]}
+                    onPress={() => setNewCaseType(type)}
+                    disabled={newCaseLoading}
+                  >
+                    <Text
+                      style={[
+                        styles.caseTypeOptionText,
+                        newCaseType === type && styles.caseTypeOptionTextSelected,
+                      ]}
+                    >
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Docket Number */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Docket Number (Optional)</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Enter docket number"
+                placeholderTextColor="#666666"
+                value={newCaseDocket}
+                onChangeText={setNewCaseDocket}
+                editable={!newCaseLoading}
+                autoFocus={false}
+              />
+            </View>
+
+            {/* Error Message */}
+            {newCaseError ? <Text style={styles.formError}>{newCaseError}</Text> : null}
+
+            {/* Create Button */}
+            <TouchableOpacity
+              style={[styles.createButton, newCaseLoading && styles.createButtonDisabled]}
+              onPress={onCreateCase}
+              disabled={newCaseLoading}
+            >
+              {newCaseLoading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.createButtonText}>Create Case</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -208,105 +336,24 @@ export default function App() {
     }
   };
 
-  // New Case Form Modal
-  const NewCaseModal = () => (
-    <Modal
-      visible={showNewCaseForm}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowNewCaseForm(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>New Case</Text>
-            <TouchableOpacity onPress={() => setShowNewCaseForm(false)}>
-              <Text style={styles.modalCloseButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
-            {/* Case Title */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Case Title *</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="Enter case title"
-                placeholderTextColor="#666666"
-                value={newCaseTitle}
-                onChangeText={setNewCaseTitle}
-                editable={!newCaseLoading}
-              />
-            </View>
-
-            {/* Case Type */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Case Type *</Text>
-              <View style={styles.caseTypePicker}>
-                {CASE_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.caseTypeOption,
-                      newCaseType === type && styles.caseTypeOptionSelected,
-                    ]}
-                    onPress={() => setNewCaseType(type)}
-                    disabled={newCaseLoading}
-                  >
-                    <Text
-                      style={[
-                        styles.caseTypeOptionText,
-                        newCaseType === type && styles.caseTypeOptionTextSelected,
-                      ]}
-                    >
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Docket Number */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Docket Number (Optional)</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="Enter docket number"
-                placeholderTextColor="#666666"
-                value={newCaseDocket}
-                onChangeText={setNewCaseDocket}
-                editable={!newCaseLoading}
-              />
-            </View>
-
-            {/* Error Message */}
-            {newCaseError ? <Text style={styles.formError}>{newCaseError}</Text> : null}
-
-            {/* Create Button */}
-            <TouchableOpacity
-              style={[styles.createButton, newCaseLoading && styles.createButtonDisabled]}
-              onPress={handleCreateCase}
-              disabled={newCaseLoading}
-            >
-              {newCaseLoading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.createButtonText}>Create Case</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-
   // Lawyer Dashboard Screen
   if (success && userData) {
     return (
       <View style={styles.container}>
-        <NewCaseModal />
+        <NewCaseModal
+          visible={showNewCaseForm}
+          onClose={() => setShowNewCaseForm(false)}
+          onCreateCase={handleCreateCase}
+          newCaseTitle={newCaseTitle}
+          setNewCaseTitle={setNewCaseTitle}
+          newCaseType={newCaseType}
+          setNewCaseType={setNewCaseType}
+          newCaseDocket={newCaseDocket}
+          setNewCaseDocket={setNewCaseDocket}
+          newCaseLoading={newCaseLoading}
+          newCaseError={newCaseError}
+          styles={styles}
+        />
 
         {/* Header */}
         <View style={styles.header}>

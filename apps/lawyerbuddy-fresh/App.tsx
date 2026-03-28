@@ -157,6 +157,9 @@ const TRANSLATIONS = {
   },
 };
 
+// Module-level cache for language preference to prevent resets during re-renders
+let cachedLanguage: 'en' | 'es' = 'en';
+
 const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
 
 const CHECKLIST_TEMPLATES: Record<string, string[]> = {
@@ -1390,7 +1393,8 @@ function AcceptInviteScreen({
 }
 
 export default function App() {
-  const [language, setLanguage] = useState<'en' | 'es'>('en');
+  // Initialize with cached language to prevent reset on re-renders
+  const [language, setLanguage] = useState<'en' | 'es'>(cachedLanguage);
   const t = TRANSLATIONS[language];
 
   const [email, setEmail] = useState('');
@@ -1453,9 +1457,11 @@ export default function App() {
       try {
         const saved = await AsyncStorage.getItem('appLanguage');
         if (saved === 'es') {
+          cachedLanguage = 'es';  // Update module-level cache
           setLanguage('es');
           console.log('✅ Loaded language preference: ES');
         } else if (saved === 'en') {
+          cachedLanguage = 'en';  // Update module-level cache
           setLanguage('en');
           console.log('✅ Loaded language preference: EN');
         }
@@ -2192,6 +2198,7 @@ export default function App() {
           style={[styles.langButton, language === 'en' && styles.langButtonActive]}
           onPress={async () => {
             console.log('🌐 Language switched to EN');
+            cachedLanguage = 'en';  // Update module-level cache first
             setLanguage('en');
             await AsyncStorage.setItem('appLanguage', 'en');
           }}
@@ -2203,6 +2210,7 @@ export default function App() {
           style={[styles.langButton, language === 'es' && styles.langButtonActive]}
           onPress={async () => {
             console.log('🌐 Language switched to ES');
+            cachedLanguage = 'es';  // Update module-level cache first
             setLanguage('es');
             await AsyncStorage.setItem('appLanguage', 'es');
           }}

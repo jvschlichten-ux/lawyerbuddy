@@ -1447,11 +1447,23 @@ export default function App() {
   // Tab State for Case Detail
   const [caseDetailTab, setCaseDetailTab] = useState<'checklist' | 'messages' | 'documents' | 'dates'>('checklist');
 
-  // Load language preference
+  // Load language preference on app startup
   useEffect(() => {
-    AsyncStorage.getItem('appLanguage').then((saved) => {
-      if (saved === 'es') setLanguage('es');
-    });
+    const loadLanguage = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('appLanguage');
+        if (saved === 'es') {
+          setLanguage('es');
+          console.log('✅ Loaded language preference: ES');
+        } else if (saved === 'en') {
+          setLanguage('en');
+          console.log('✅ Loaded language preference: EN');
+        }
+      } catch (err) {
+        console.error('Error loading language:', err);
+      }
+    };
+    loadLanguage();
   }, []);
 
   useEffect(() => {
@@ -2178,10 +2190,10 @@ export default function App() {
       <View style={styles.languageToggle}>
         <TouchableOpacity
           style={[styles.langButton, language === 'en' && styles.langButtonActive]}
-          onPress={() => {
+          onPress={async () => {
             console.log('🌐 Language switched to EN');
             setLanguage('en');
-            AsyncStorage.setItem('appLanguage', 'en');
+            await AsyncStorage.setItem('appLanguage', 'en');
           }}
           activeOpacity={0.7}
         >
@@ -2189,10 +2201,10 @@ export default function App() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.langButton, language === 'es' && styles.langButtonActive]}
-          onPress={() => {
+          onPress={async () => {
             console.log('🌐 Language switched to ES');
             setLanguage('es');
-            AsyncStorage.setItem('appLanguage', 'es');
+            await AsyncStorage.setItem('appLanguage', 'es');
           }}
           activeOpacity={0.7}
         >

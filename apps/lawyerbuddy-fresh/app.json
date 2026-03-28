@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "lawyerbuddy-fresh",
-    "slug": "lawyerbuddy-fresh",
+    "name": "LawyerBuddy",
+    "slug": "lawyerbuddy",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "lawyerbuddy",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
@@ -13,7 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vonschlichten.lawyerbuddyfresh",
+      "bundleIdentifier": "com.vonschlichten.lawyerbuddy",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -29,11 +31,6 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "d6316507-2d98-4652-92bf-37d6e276e0b9"
-      }
     }
   }
 }

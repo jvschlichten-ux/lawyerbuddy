@@ -1,6 +1,7 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard, SafeAreaView, Linking } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 
 const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
 
@@ -825,6 +826,209 @@ function NewCaseModal({
   );
 }
 
+// Accept Invite Screen
+function AcceptInviteScreen({
+  inviteToken,
+  onClose,
+  onSuccess,
+  styles,
+}: {
+  inviteToken: string;
+  onClose: () => void;
+  onSuccess?: (token: string, userData: any) => void;
+  styles: any;
+}) {
+  const [fullName, setFullName] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [inviteData, setInviteData] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [accepting, setAccepting] = useState(false);
+
+  useEffect(() => {
+    validateInvite();
+  }, []);
+
+  const validateInvite = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/auth/invite/${inviteToken}`,
+        { method: 'GET' }
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        setInviteData(data);
+        console.log('✅ Invite valid:', data);
+      } else {
+        setError(data.error || 'Invalid invite');
+      }
+    } catch (err: any) {
+      setError('Failed to validate invite: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptInvite = async () => {
+    if (!fullName.trim() || !invitePassword.trim()) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    setAccepting(true);
+
+    try {
+      const response = await fetch(
+        'https://lawyerbuddy-production.up.railway.app/auth/invite/accept',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: inviteToken,
+            email: inviteData.invitedEmail,
+            password: invitePassword,
+            fullName,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Save token
+        await AsyncStorage.setItem('userToken', data.accessToken);
+
+        // Auto-login the user
+        const userData = {
+          full_name: data.profile?.full_name || fullName,
+          role: data.profile?.role || 'client',
+        };
+
+        console.log('✅ Account created! Auto-logging in...');
+
+        // Call success callback to auto-login
+        if (onSuccess) {
+          onSuccess(data.accessToken, userData);
+        }
+
+        onClose();
+      } else {
+        setError(data.error || 'Failed to accept invite');
+      }
+    } catch (err: any) {
+      setError('Error: ' + err.message);
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#0066cc" />
+          <Text style={{ color: '#888888', marginTop: 16 }}>Validating invite...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && !inviteData) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+          <Text style={{ color: '#ff4444', fontSize: 18, fontWeight: '600', marginBottom: 16, textAlign: 'center' }}>
+            ❌ {error}
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#0066cc', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+            onPress={onClose}
+          >
+            <Text style={{ color: '#ffffff', fontWeight: '600' }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <View style={{ paddingHorizontal: 24, paddingVertical: 40, flex: 1, justifyContent: 'center' }}>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: '#ffffff', marginBottom: 8 }}>
+              Accept Invite
+            </Text>
+            <Text style={{ fontSize: 16, color: '#888888', marginBottom: 32 }}>
+              {inviteData?.lawyerName} invited you to join their case
+            </Text>
+
+            <View style={{ backgroundColor: '#0066cc', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8, marginBottom: 32 }}>
+              <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600' }}>
+                Case: {inviteData?.caseTitle}
+              </Text>
+            </View>
+
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Your full name"
+                placeholderTextColor="#666666"
+                value={fullName}
+                onChangeText={setFullName}
+                editable={!accepting}
+              />
+            </View>
+
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Create a password"
+                placeholderTextColor="#666666"
+                value={invitePassword}
+                onChangeText={setInvitePassword}
+                secureTextEntry
+                editable={!accepting}
+              />
+            </View>
+
+            {error && <Text style={{ color: '#ff4444', marginBottom: 16 }}>❌ {error}</Text>}
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#22c55e', paddingVertical: 16, borderRadius: 8, alignItems: 'center', marginBottom: 12 }}
+              onPress={handleAcceptInvite}
+              disabled={accepting}
+            >
+              {accepting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 16 }}>Create Account & Accept</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ paddingVertical: 12, alignItems: 'center' }}
+              onPress={onClose}
+              disabled={accepting}
+            >
+              <Text style={{ color: '#0066cc', fontWeight: '600' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
 export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -856,12 +1060,43 @@ export default function App() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
 
+  // Deep Link State for Invites
+  const [currentInviteToken, setCurrentInviteToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (success && userData) {
       fetchCases();
     }
   }, [success, userData]);
+
+  // Deep Link Handler for Invites
+  useEffect(() => {
+    // Handle deep link when app is already running
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      console.log('🔗 Deep link received:', url);
+      const token = parseInviteToken(url);
+      if (token) {
+        console.log('✅ Invite token extracted:', token);
+        setCurrentInviteToken(token);
+      }
+    });
+
+    // Check for deep link when app launches
+    Linking.getInitialURL().then((url) => {
+      if (url != null) {
+        console.log('🔗 Initial deep link:', url);
+        const token = parseInviteToken(url);
+        if (token) {
+          console.log('✅ Initial invite token extracted:', token);
+          setCurrentInviteToken(token);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const fetchCases = async (tokenOverride?: string) => {
     try {
@@ -1127,6 +1362,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    console.log('🔴 Logging out...');
     await AsyncStorage.removeItem('userToken');
     await AsyncStorage.removeItem('userRole');
     setSuccess(false);
@@ -1135,6 +1371,8 @@ export default function App() {
     setUserToken(null);
     setSelectedCaseId(null);
     setShowNewCaseForm(false);
+    setCurrentInviteToken(null);
+    console.log('✅ Logout complete');
   };
 
   const handleSendInvite = async () => {
@@ -1210,6 +1448,27 @@ export default function App() {
     }
   };
 
+  // Accept Invite Screen (via deep link)
+  if (currentInviteToken) {
+    return (
+      <AcceptInviteScreen
+        inviteToken={currentInviteToken}
+        onClose={() => {
+          console.log('❌ Closing accept invite screen');
+          setCurrentInviteToken(null);
+        }}
+        onSuccess={(token: string, userData: any) => {
+          console.log('✅ Invite accepted! Auto-logging in user...');
+          setUserToken(token);
+          setUserData(userData);
+          setSuccess(true);
+          setCurrentInviteToken(null);
+        }}
+        styles={styles}
+      />
+    );
+  }
+
   // Case Detail Screen
   if (success && userData && selectedCaseId) {
     const selectedCase = cases.find((c) => c.id === selectedCaseId);
@@ -1254,7 +1513,7 @@ export default function App() {
   // Lawyer Dashboard Screen
   if (success && userData) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <NewCaseModal
           visible={showNewCaseForm}
           onClose={() => setShowNewCaseForm(false)}
@@ -1307,7 +1566,10 @@ export default function App() {
                 {cases.map((caseItem, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={styles.caseCard}
+                    style={[
+                      styles.caseCard,
+                      { borderLeftColor: getCaseTypeColor(caseItem.case_type || 'Other') },
+                    ]}
                     onPress={() => {
                       console.log('📂 Navigating to case detail:', caseItem.id, caseItem.title);
                       setSelectedCaseId(caseItem.id);
@@ -1315,7 +1577,14 @@ export default function App() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.caseCardHeader}>
-                      <Text style={styles.caseTitle}>{caseItem.title || 'Untitled Case'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 20, marginRight: 10 }}>
+                            {getCaseTypeEmoji(caseItem.case_type || 'Other')}
+                          </Text>
+                          <Text style={styles.caseTitle}>{caseItem.title || 'Untitled Case'}</Text>
+                        </View>
+                      </View>
                       <View
                         style={[
                           styles.statusBadge,
@@ -1335,9 +1604,11 @@ export default function App() {
                       {caseItem.client?.full_name ? `Client: ${caseItem.client.full_name}` : 'No client assigned'}
                     </Text>
                     {checklistProgress[caseItem.id] && (
-                      <Text style={{ color: '#888888', fontSize: 13, marginTop: 8 }}>
-                        📋 {checklistProgress[caseItem.id].completed}/{checklistProgress[caseItem.id].total} items complete
-                      </Text>
+                      <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#333333' }}>
+                        <Text style={{ color: '#888888', fontSize: 13, fontWeight: '500' }}>
+                          ✓ {checklistProgress[caseItem.id].completed}/{checklistProgress[caseItem.id].total} items complete
+                        </Text>
+                      </View>
                     )}
                   </TouchableOpacity>
                 ))}
@@ -1362,7 +1633,7 @@ export default function App() {
             <Text style={styles.newCaseButtonText}>+ New Case</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -1375,6 +1646,9 @@ export default function App() {
       <View style={styles.content}>
         {/* Logo */}
         <View style={styles.logoContainer}>
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoInitials}>LB</Text>
+          </View>
           <Text style={styles.logoText}>LawyerBuddy</Text>
           <Text style={styles.tagline}>Tu Abogado</Text>
         </View>
@@ -1446,6 +1720,50 @@ function getTimeOfDay(): string {
   return 'evening';
 }
 
+function parseInviteToken(url: string): string | null {
+  // Parse URLs like: lawyerbuddy://invite/token123
+  // or lawyerbuddy://invite?token=token123
+  try {
+    const match = url.match(/lawyerbuddy:\/\/invite\/([^?/]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+
+    // Try to parse as URL parameter
+    const urlObj = new URL(url);
+    const token = urlObj.searchParams.get('token');
+    if (token) {
+      return token;
+    }
+  } catch (err) {
+    console.warn('Failed to parse invite token from URL:', err);
+  }
+
+  return null;
+}
+
+function getCaseTypeColor(caseType: string): string {
+  const colorMap: Record<string, string> = {
+    'Family Law': '#0066cc',
+    'Civil': '#9333ea',
+    'Compliance/Forms': '#06b6d4',
+    'Criminal Defense': '#dc2626',
+    'Other': '#6b7280',
+  };
+  return colorMap[caseType] || '#0066cc';
+}
+
+function getCaseTypeEmoji(caseType: string): string {
+  const emojiMap: Record<string, string> = {
+    'Family Law': '👨‍👩‍👧‍👦',
+    'Civil': '⚖️',
+    'Compliance/Forms': '📋',
+    'Criminal Defense': '🛡️',
+    'Other': '📄',
+  };
+  return emojiMap[caseType] || '📄';
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1462,54 +1780,77 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: 80,
   },
-  logoText: {
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#0066cc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoInitials: {
     fontSize: 36,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  logoText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 12,
+    letterSpacing: 0.5,
   },
   tagline: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#888888',
+    fontStyle: 'italic',
   },
   formContainer: {
     gap: 20,
   },
   inputGroup: {
-    gap: 8,
+    gap: 10,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.5,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#333333',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     fontSize: 16,
     color: '#ffffff',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0a0a0a',
   },
   loginButton: {
     backgroundColor: '#0066cc',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: 12,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 16,
+    shadowColor: '#0066cc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   loginButtonDisabled: {
     backgroundColor: '#0052a3',
-    opacity: 0.8,
+    opacity: 0.7,
   },
   loginButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.5,
   },
   errorText: {
     color: '#ff4444',
@@ -1537,7 +1878,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#1a1a1a',
@@ -1546,15 +1887,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   greeting: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#888888',
     fontWeight: '500',
+    letterSpacing: 0.3,
   },
   userName: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: '#ffffff',
-    marginTop: 4,
+    marginTop: 6,
+    letterSpacing: 0.5,
   },
   logoutButton: {
     backgroundColor: '#ff4444',
@@ -1569,33 +1912,34 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 28,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 16,
+    marginBottom: 18,
+    letterSpacing: 0.5,
   },
   casesList: {
-    gap: 12,
+    gap: 14,
   },
   caseCard: {
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
+    padding: 18,
+    borderLeftWidth: 5,
     borderLeftColor: '#0066cc',
   },
   caseCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   caseTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#ffffff',
     flex: 1,
     marginRight: 8,
@@ -1611,14 +1955,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   caseType: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#888888',
-    marginBottom: 8,
+    marginBottom: 10,
     fontWeight: '500',
+    letterSpacing: 0.3,
   },
   caseDetails: {
-    fontSize: 12,
-    color: '#666666',
+    fontSize: 13,
+    color: '#aaaaaa',
   },
   emptyState: {
     alignItems: 'center',
@@ -1651,13 +1996,18 @@ const styles = StyleSheet.create({
   newCaseButton: {
     backgroundColor: '#22c55e',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 18,
     alignItems: 'center',
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   newCaseButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.5,
   },
   // Modal Styles
   modalOverlay: {
@@ -1696,20 +2046,21 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   formGroup: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   formLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 8,
+    marginBottom: 10,
+    letterSpacing: 0.5,
   },
   formInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#333333',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     fontSize: 16,
     color: '#ffffff',
     backgroundColor: '#0a0a0a',
@@ -1750,10 +2101,14 @@ const styles = StyleSheet.create({
   },
   createButton: {
     backgroundColor: '#22c55e',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: 10,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 12,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   createButtonDisabled: {
     opacity: 0.6,
@@ -1762,6 +2117,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.5,
   },
   // Invite Modal Button Styles
   inviteButtonRow: {

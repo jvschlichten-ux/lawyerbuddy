@@ -1,6 +1,8 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
 
 export default function App() {
   const [email, setEmail] = useState('');
@@ -12,6 +14,14 @@ export default function App() {
   const [cases, setCases] = useState<any[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
   const [userToken, setUserToken] = useState<string | null>(null);
+
+  // New Case Form State
+  const [showNewCaseForm, setShowNewCaseForm] = useState(false);
+  const [newCaseTitle, setNewCaseTitle] = useState('');
+  const [newCaseType, setNewCaseType] = useState('Family Law');
+  const [newCaseDocket, setNewCaseDocket] = useState('');
+  const [newCaseLoading, setNewCaseLoading] = useState(false);
+  const [newCaseError, setNewCaseError] = useState('');
 
   useEffect(() => {
     if (success && userData) {
@@ -51,6 +61,66 @@ export default function App() {
       console.error('Error fetching cases:', err);
     } finally {
       setCasesLoading(false);
+    }
+  };
+
+  const handleCreateCase = async () => {
+    setNewCaseError('');
+
+    // Validate inputs
+    if (!newCaseTitle.trim()) {
+      setNewCaseError('Case title is required');
+      return;
+    }
+
+    setNewCaseLoading(true);
+
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setNewCaseError('Not authenticated');
+        setNewCaseLoading(false);
+        return;
+      }
+
+      const caseData = {
+        title: newCaseTitle,
+        case_type: newCaseType,
+        docket_number: newCaseDocket || undefined,
+        status: 'open',
+      };
+
+      console.log('Creating case:', caseData);
+
+      const response = await fetch('https://lawyerbuddy-production.up.railway.app/cases', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(caseData),
+      });
+
+      const data = await response.json();
+      console.log('Create case response:', data);
+
+      if (response.ok) {
+        // Reset form
+        setNewCaseTitle('');
+        setNewCaseType('Family Law');
+        setNewCaseDocket('');
+        setShowNewCaseForm(false);
+
+        // Refresh cases list
+        await fetchCases();
+      } else {
+        setNewCaseError(data.message || 'Failed to create case');
+      }
+    } catch (err: any) {
+      console.error('Error creating case:', err);
+      setNewCaseError('Network error: ' + err.message);
+    } finally {
+      setNewCaseLoading(false);
     }
   };
 
@@ -138,10 +208,106 @@ export default function App() {
     }
   };
 
+  // New Case Form Modal
+  const NewCaseModal = () => (
+    <Modal
+      visible={showNewCaseForm}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowNewCaseForm(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>New Case</Text>
+            <TouchableOpacity onPress={() => setShowNewCaseForm(false)}>
+              <Text style={styles.modalCloseButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
+            {/* Case Title */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Case Title *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Enter case title"
+                placeholderTextColor="#666666"
+                value={newCaseTitle}
+                onChangeText={setNewCaseTitle}
+                editable={!newCaseLoading}
+              />
+            </View>
+
+            {/* Case Type */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Case Type *</Text>
+              <View style={styles.caseTypePicker}>
+                {CASE_TYPES.map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.caseTypeOption,
+                      newCaseType === type && styles.caseTypeOptionSelected,
+                    ]}
+                    onPress={() => setNewCaseType(type)}
+                    disabled={newCaseLoading}
+                  >
+                    <Text
+                      style={[
+                        styles.caseTypeOptionText,
+                        newCaseType === type && styles.caseTypeOptionTextSelected,
+                      ]}
+                    >
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Docket Number */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Docket Number (Optional)</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Enter docket number"
+                placeholderTextColor="#666666"
+                value={newCaseDocket}
+                onChangeText={setNewCaseDocket}
+                editable={!newCaseLoading}
+              />
+            </View>
+
+            {/* Error Message */}
+            {newCaseError ? <Text style={styles.formError}>{newCaseError}</Text> : null}
+
+            {/* Create Button */}
+            <TouchableOpacity
+              style={[styles.createButton, newCaseLoading && styles.createButtonDisabled]}
+              onPress={handleCreateCase}
+              disabled={newCaseLoading}
+            >
+              {newCaseLoading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.createButtonText}>Create Case</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   // Lawyer Dashboard Screen
   if (success && userData) {
     return (
       <View style={styles.container}>
+        <NewCaseModal />
+
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -201,7 +367,10 @@ export default function App() {
 
         {/* New Case Button - Fixed at Bottom */}
         <View style={styles.bottomButton}>
-          <TouchableOpacity style={styles.newCaseButton}>
+          <TouchableOpacity
+            style={styles.newCaseButton}
+            onPress={() => setShowNewCaseForm(true)}
+          >
             <Text style={styles.newCaseButtonText}>+ New Case</Text>
           </TouchableOpacity>
         </View>
@@ -496,6 +665,110 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   newCaseButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingTop: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  modalCloseButton: {
+    fontSize: 24,
+    color: '#888888',
+    fontWeight: '600',
+  },
+  modalForm: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  formGroup: {
+    marginBottom: 24,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 8,
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#ffffff',
+    backgroundColor: '#0a0a0a',
+  },
+  caseTypePicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  caseTypeOption: {
+    flex: 1,
+    minWidth: '45%',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 8,
+    backgroundColor: '#0a0a0a',
+    alignItems: 'center',
+  },
+  caseTypeOptionSelected: {
+    borderColor: '#22c55e',
+    backgroundColor: '#22c55e20',
+  },
+  caseTypeOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888888',
+  },
+  caseTypeOptionTextSelected: {
+    color: '#22c55e',
+  },
+  formError: {
+    color: '#ff4444',
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  createButton: {
+    backgroundColor: '#22c55e',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  createButtonDisabled: {
+    opacity: 0.6,
+  },
+  createButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',

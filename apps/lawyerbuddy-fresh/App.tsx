@@ -151,6 +151,9 @@ export default function App() {
   const [newCaseLoading, setNewCaseLoading] = useState(false);
   const [newCaseError, setNewCaseError] = useState('');
 
+  // Case Detail State
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+
   useEffect(() => {
     if (success && userData) {
       fetchCases();
@@ -202,11 +205,14 @@ export default function App() {
     }
 
     setNewCaseLoading(true);
+    const caseTitle = newCaseTitle; // Store for alert after reset
 
     try {
       const token = await AsyncStorage.getItem('userToken');
+      console.log('📋 Retrieved token from AsyncStorage:', token ? `Token exists (${token.length} chars)` : '❌ NO TOKEN');
+
       if (!token) {
-        setNewCaseError('Not authenticated');
+        setNewCaseError('Not authenticated - please log in again');
         setNewCaseLoading(false);
         return;
       }
@@ -217,9 +223,9 @@ export default function App() {
         docketNumber: newCaseDocket || undefined,
       };
 
-      console.log('Creating case with data:', JSON.stringify(caseData, null, 2));
-      console.log('POST URL: https://lawyerbuddy-production.up.railway.app/cases');
-      console.log('Auth header: Bearer', token.substring(0, 20) + '...');
+      console.log('📤 Creating case with data:', JSON.stringify(caseData, null, 2));
+      console.log('🔗 POST URL: https://lawyerbuddy-production.up.railway.app/cases');
+      console.log('🔐 Auth header: Bearer', token.substring(0, 30) + '...');
 
       const response = await fetch('https://lawyerbuddy-production.up.railway.app/cases', {
         method: 'POST',
@@ -231,26 +237,30 @@ export default function App() {
       });
 
       const data = await response.json();
-      console.log('Response status:', response.status);
-      console.log('Response body:', JSON.stringify(data, null, 2));
+      console.log('📥 Response status:', response.status);
+      console.log('📥 Response body:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.success) {
-        console.log('Case created successfully:', data.case);
-        // Reset form
+        console.log('✅ Case created successfully:', data.case);
+
+        // Reset form and dismiss modal
         setNewCaseTitle('');
         setNewCaseType('Family Law');
         setNewCaseDocket('');
         setShowNewCaseForm(false);
 
+        // Show success alert
+        alert(`✅ Case "${caseTitle}" created successfully!`);
+
         // Refresh cases list
         await fetchCases();
       } else {
         const errorMessage = data.error || data.message || 'Failed to create case';
-        console.error('Case creation error:', errorMessage);
+        console.error('❌ Case creation error:', errorMessage);
         setNewCaseError(errorMessage);
       }
     } catch (err: any) {
-      console.error('Network error creating case:', err);
+      console.error('❌ Network error creating case:', err);
       console.error('Error details:', JSON.stringify(err, null, 2));
       setNewCaseError('Network error: ' + err.message);
     } finally {
@@ -365,7 +375,7 @@ export default function App() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>Good {getTimeOfDay()},</Text>
-            <Text style={styles.userName}>{userData.full_name}</Text>
+            <Text style={styles.userName}>{userData.full_name.split(' ')[0]}</Text>
           </View>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Logout</Text>
@@ -386,7 +396,16 @@ export default function App() {
             ) : cases.length > 0 ? (
               <View style={styles.casesList}>
                 {cases.map((caseItem, index) => (
-                  <TouchableOpacity key={index} style={styles.caseCard}>
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.caseCard}
+                    onPress={() => {
+                      console.log('📂 Tapped case:', caseItem.id, caseItem.title);
+                      setSelectedCaseId(caseItem.id);
+                      // TODO: Navigate to case detail screen
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.caseCardHeader}>
                       <Text style={styles.caseTitle}>{caseItem.title || 'Untitled Case'}</Text>
                       <View
@@ -396,11 +415,14 @@ export default function App() {
                         ]}
                       >
                         <Text style={[styles.statusText, { color: getStatusColor(caseItem.status) }]}>
-                          {caseItem.status || 'PENDING'}
+                          {(caseItem.status || 'active').toUpperCase()}
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.caseType}>{caseItem.case_type || 'General Law'}</Text>
+                    <Text style={styles.caseType}>
+                      {caseItem.case_type || 'General Law'}
+                      {caseItem.docket_number ? ` • Docket: ${caseItem.docket_number}` : ''}
+                    </Text>
                     <Text style={styles.caseDetails}>
                       {caseItem.client_name ? `Client: ${caseItem.client_name}` : 'No client assigned'}
                     </Text>

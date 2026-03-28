@@ -38,9 +38,13 @@ export function verifyJWT(req: Request, res: Response, next: NextFunction) {
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Decode JWT without verification (for Supabase JWTs)
-    // In production, verify against Supabase's public key
-    const decoded = jwt.decode(token) as any;
+    // Manually decode JWT payload (part 2 of 3)
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+
+    const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
 
     if (!decoded || !decoded.sub) {
       return res.status(401).json({ error: 'Invalid token: missing user ID' });

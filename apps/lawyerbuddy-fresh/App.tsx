@@ -2268,7 +2268,6 @@ export default function App() {
             <Text style={styles.signupLink}>{t.signUp}</Text>
           </TouchableOpacity>
         </View>
-      </View>
       </KeyboardAvoidingView>
     </View>
   );

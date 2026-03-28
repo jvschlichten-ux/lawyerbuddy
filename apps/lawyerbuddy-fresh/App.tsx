@@ -16,6 +16,21 @@ function CaseDetailScreen({
 }) {
   const [checklistItems, setChecklistItems] = useState<string[]>([]);
 
+  // Guard against null/undefined caseData
+  if (!caseData) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.detailHeader}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.detailTitle}>Case Not Found</Text>
+          <View style={{ width: 60 }} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -23,7 +38,7 @@ function CaseDetailScreen({
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.detailTitle}>{caseData.title}</Text>
+        <Text style={styles.detailTitle}>{caseData?.title || 'Untitled Case'}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -34,24 +49,24 @@ function CaseDetailScreen({
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Case Type:</Text>
-            <Text style={styles.detailValue}>{caseData.case_type || 'General Law'}</Text>
+            <Text style={styles.detailValue}>{caseData?.case_type || 'General Law'}</Text>
           </View>
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Status:</Text>
             <Text style={[styles.detailValue, { color: '#22c55e' }]}>
-              {(caseData.status || 'active').toUpperCase()}
+              {(caseData?.status || 'active').toUpperCase()}
             </Text>
           </View>
 
-          {caseData.docket_number && (
+          {caseData?.docket_number && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Docket Number:</Text>
               <Text style={styles.detailValue}>{caseData.docket_number}</Text>
             </View>
           )}
 
-          {caseData.client_name && (
+          {caseData?.client_name && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Client:</Text>
               <Text style={styles.detailValue}>{caseData.client_name}</Text>
@@ -270,7 +285,7 @@ export default function App() {
             setUserToken(token);
 
             // Try to fetch user data to verify token is still valid
-            const response = await fetch('https://lawyerbuddy-production.up.railway.app/profile', {
+            const response = await fetch('https://lawyerbuddy-production.up.railway.app/auth/me', {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -282,16 +297,44 @@ export default function App() {
               const data = await response.json();
               console.log('✅ Token verified, setting user data');
               const role = data?.profile?.role || data?.user?.role || 'lawyer';
-              const name = data?.profile?.full_name || data?.user?.email || 'User';
+              const name = (data?.profile?.full_name || data?.user?.email || 'User').trim();
 
-              if (!name || name.trim() === '') {
+              if (!name || name === '') {
                 console.warn('⚠️ Invalid name from response, using default');
               }
 
               setUserData({
-                full_name: (name || 'User').trim(),
+                full_name: name || 'User',
                 role: role,
               });
+
+              // Fetch cases before setting success to avoid dashboard render race
+              console.log('📥 Auto-login: fetching cases...');
+              setCasesLoading(true);
+              try {
+                const casesResponse = await fetch('https://lawyerbuddy-production.up.railway.app/cases', {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
+
+                const casesData = await casesResponse.json();
+                if (casesResponse.ok && casesData.cases) {
+                  setCases(casesData.cases);
+                  console.log('✅ Auto-login: cases loaded');
+                } else {
+                  console.warn('⚠️ Auto-login: failed to load cases');
+                  setCases([]);
+                }
+              } catch (casesErr) {
+                console.error('❌ Auto-login: error fetching cases:', casesErr);
+                setCases([]);
+              } finally {
+                setCasesLoading(false);
+              }
+
               setSuccess(true);
               console.log('✅ Auto-login successful');
             } else {
@@ -300,6 +343,7 @@ export default function App() {
               await AsyncStorage.removeItem('userRole');
               setSuccess(false);
               setUserData(null);
+              setCases([]);
             }
           } else {
             console.log('ℹ️ No existing token found');
@@ -314,6 +358,7 @@ export default function App() {
           }
           setSuccess(false);
           setUserData(null);
+          setCases([]);
         }
       } catch (err) {
         console.error('❌ Unexpected error during app initialization:', err);
@@ -333,18 +378,19 @@ export default function App() {
     }
   }, [success, userData]);
 
-  const fetchCases = async () => {
+  const fetchCases = async (tokenOverride?: string) => {
     try {
       setCasesLoading(true);
-      const token = await AsyncStorage.getItem('userToken');
+      const token = tokenOverride || (await AsyncStorage.getItem('userToken'));
       setUserToken(token);
 
       if (!token) {
-        console.error('No token found');
+        console.error('❌ No token found for fetching cases');
+        setCases([]);
         return;
       }
 
-      console.log('Fetching cases with token...');
+      console.log('📥 Fetching cases with token...');
       const response = await fetch('https://lawyerbuddy-production.up.railway.app/cases', {
         method: 'GET',
         headers: {
@@ -354,15 +400,18 @@ export default function App() {
       });
 
       const data = await response.json();
-      console.log('Cases response:', data);
+      console.log('📦 Cases response:', data);
 
       if (response.ok && data.cases) {
         setCases(data.cases);
+        console.log('✅ Cases loaded successfully');
       } else {
-        console.error('Failed to fetch cases:', data);
+        console.error('❌ Failed to fetch cases:', data);
+        setCases([]);
       }
     } catch (err: any) {
-      console.error('Error fetching cases:', err);
+      console.error('❌ Error fetching cases:', err);
+      setCases([]);
     } finally {
       setCasesLoading(false);
     }
@@ -478,7 +527,14 @@ export default function App() {
 
       // Extract role and name with null safety
       const role = data?.profile?.role || data?.user?.role || 'lawyer';
-      const name = data?.profile?.full_name || data?.user?.email || 'User';
+      const name = (data?.profile?.full_name || data?.user?.email || 'User').trim();
+
+      // Validate name is not empty
+      if (!name || name === '') {
+        setError('Invalid user data received from server');
+        setLoading(false);
+        return;
+      }
 
       // Store token and role
       await AsyncStorage.setItem('userToken', data.session.access_token);
@@ -518,6 +574,8 @@ export default function App() {
     setUserData(null);
     setCases([]);
     setUserToken(null);
+    setSelectedCaseId(null);
+    setShowNewCaseForm(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -536,14 +594,21 @@ export default function App() {
   // Case Detail Screen
   if (success && userData && selectedCaseId) {
     const selectedCase = cases.find((c) => c.id === selectedCaseId);
-    if (selectedCase) {
+    if (selectedCase && Object.keys(selectedCase).length > 0) {
       return (
         <CaseDetailScreen
           caseData={selectedCase}
-          onBack={() => setSelectedCaseId(null)}
+          onBack={() => {
+            console.log('🔙 Navigating back from case detail');
+            setSelectedCaseId(null);
+          }}
           styles={styles}
         />
       );
+    } else {
+      // Case not found, clear selection
+      console.warn('⚠️ Selected case not found, clearing selection');
+      setSelectedCaseId(null);
     }
   }
 

@@ -398,7 +398,6 @@ function NewCaseModal({
 export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -406,7 +405,6 @@ export default function App() {
   const [cases, setCases] = useState<any[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
   const [userToken, setUserToken] = useState<string | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
 
   // New Case Form State
   const [showNewCaseForm, setShowNewCaseForm] = useState(false);
@@ -425,117 +423,6 @@ export default function App() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
 
-  // Initialize: Check for existing session and remembered email
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        console.log('🔄 Starting app initialization...');
-
-        // Load remembered email
-        try {
-          const rememberedEmail = await AsyncStorage.getItem('rememberedEmail');
-          if (rememberedEmail) {
-            console.log('📧 Loaded remembered email');
-            setEmail(rememberedEmail);
-          }
-        } catch (err) {
-          console.error('Error loading remembered email:', err);
-        }
-
-        // Check for existing token and auto-login
-        try {
-          const token = await AsyncStorage.getItem('userToken');
-          if (token) {
-            console.log('🔐 Found existing token, attempting auto-login...');
-            setUserToken(token);
-
-            // Try to fetch user data to verify token is still valid
-            const response = await fetch('https://lawyerbuddy-production.up.railway.app/auth/me', {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              console.log('✅ Token verified, setting user data');
-              const role = data?.profile?.role || data?.user?.role || 'lawyer';
-              const name = (data?.profile?.full_name || data?.user?.email || 'User').trim();
-
-              if (!name || name === '') {
-                console.warn('⚠️ Invalid name from response, using default');
-              }
-
-              setUserData({
-                full_name: name || 'User',
-                role: role,
-              });
-
-              // Fetch cases before setting success to avoid dashboard render race
-              console.log('📥 Auto-login: fetching cases...');
-              setCasesLoading(true);
-              try {
-                const casesResponse = await fetch('https://lawyerbuddy-production.up.railway.app/cases', {
-                  method: 'GET',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                });
-
-                const casesData = await casesResponse.json();
-                if (casesResponse.ok && casesData.cases) {
-                  setCases(casesData.cases);
-                  console.log('✅ Auto-login: cases loaded');
-                } else {
-                  console.warn('⚠️ Auto-login: failed to load cases');
-                  setCases([]);
-                }
-              } catch (casesErr) {
-                console.error('❌ Auto-login: error fetching cases:', casesErr);
-                setCases([]);
-              } finally {
-                setCasesLoading(false);
-              }
-
-              setSuccess(true);
-              console.log('✅ Auto-login successful');
-            } else {
-              console.warn('⚠️ Token verification failed (status:', response.status + ')');
-              await AsyncStorage.removeItem('userToken');
-              await AsyncStorage.removeItem('userRole');
-              setSuccess(false);
-              setUserData(null);
-              setCases([]);
-            }
-          } else {
-            console.log('ℹ️ No existing token found');
-          }
-        } catch (err) {
-          console.error('❌ Error verifying token:', err);
-          try {
-            await AsyncStorage.removeItem('userToken');
-            await AsyncStorage.removeItem('userRole');
-          } catch (cleanupErr) {
-            console.error('Error cleaning up storage:', cleanupErr);
-          }
-          setSuccess(false);
-          setUserData(null);
-          setCases([]);
-        }
-      } catch (err) {
-        console.error('❌ Unexpected error during app initialization:', err);
-        setSuccess(false);
-        setUserData(null);
-      } finally {
-        setCheckingSession(false);
-      }
-    };
-
-    initializeApp();
-  }, []);
 
   useEffect(() => {
     if (success && userData) {
@@ -705,13 +592,6 @@ export default function App() {
       await AsyncStorage.setItem('userToken', data.session.access_token);
       await AsyncStorage.setItem('userRole', role);
 
-      // Store email if Remember Me is checked
-      if (rememberMe) {
-        await AsyncStorage.setItem('rememberedEmail', email);
-      } else {
-        await AsyncStorage.removeItem('rememberedEmail');
-      }
-
       // Set success state
       setUserData({
         full_name: name,
@@ -720,7 +600,6 @@ export default function App() {
       setSuccess(true);
       setEmail('');
       setPassword('');
-      setRememberMe(false);
     } catch (error: any) {
       console.error('Network error:', error);
       console.error('Error type:', error.name);
@@ -949,16 +828,6 @@ export default function App() {
     );
   }
 
-  // Loading Screen (while checking for existing session)
-  if (checkingSession) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#0066cc" />
-        <Text style={styles.loadingSessionText}>Loading...</Text>
-      </View>
-    );
-  }
-
   // Login Screen
   return (
     <KeyboardAvoidingView
@@ -1003,17 +872,6 @@ export default function App() {
             />
           </View>
 
-          {/* Remember Me Checkbox */}
-          <View style={styles.rememberMeContainer}>
-            <CheckBox
-              value={rememberMe}
-              onValueChange={setRememberMe}
-              disabled={loading}
-              tintColors={{ true: '#0066cc', false: '#666666' }}
-            />
-            <Text style={styles.rememberMeText}>Remember me</Text>
-          </View>
-
           {/* Error Message */}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -1054,10 +912,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0a0a0a',
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   // Login Screen Styles
   content: {
@@ -1370,23 +1224,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   // Remember Me Checkbox
-  rememberMeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: -12,
-    marginBottom: 16,
-  },
-  rememberMeText: {
-    fontSize: 14,
-    color: '#888888',
-    marginLeft: 8,
-  },
-  // Loading Session
-  loadingSessionText: {
-    fontSize: 16,
-    color: '#888888',
-    marginTop: 16,
-  },
   // Case Detail Screen
   detailHeader: {
     flexDirection: 'row',

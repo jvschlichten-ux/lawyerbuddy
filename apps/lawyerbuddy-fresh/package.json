@@ -11,6 +11,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.0.2",
     "expo": "55.0.10-canary-20260327-0789fbc",
+    "expo-dev-client": "^55.0.20-canary-20260328-2049187",
     "expo-status-bar": "55.0.5-canary-20260327-0789fbc",
     "react": "19.2.0",
     "react-native": "0.83.4"

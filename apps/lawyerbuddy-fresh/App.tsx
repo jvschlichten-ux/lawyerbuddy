@@ -1,8 +1,38 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard, SafeAreaView } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
+
+const CHECKLIST_TEMPLATES: Record<string, string[]> = {
+  'Family Law': [
+    'Sign retainer agreement',
+    'Gather financial documents',
+    'Collect child custody documentation',
+    'File initial petition',
+    'Serve spouse with papers',
+    'Attend mediation session',
+    'Prepare settlement agreement',
+  ],
+  'Compliance/Forms': [
+    'Complete compliance audit',
+    'File required forms with government',
+    'Update privacy policy',
+    'Document compliance procedures',
+    'Train staff on requirements',
+    'Schedule follow-up audit',
+  ],
+  'Criminal Defense': [
+    'Review police report',
+    'Investigate arrest circumstances',
+    'File discovery motions',
+    'Prepare defense strategy',
+    'Arrange client meeting',
+    'Prepare bail/release arguments',
+    'File pre-trial motions',
+    'Prepare for trial',
+  ],
+};
 
 // Invite Client Modal Component
 function InviteClientModal({
@@ -125,25 +155,134 @@ function CaseDetailScreen({
   inviteLoading: boolean;
   inviteError: string;
 }) {
-  const [checklistItems, setChecklistItems] = useState<string[]>([]);
+  const [checklistItems, setChecklistItems] = useState<any[]>([]);
   const [showAddItemInput, setShowAddItemInput] = useState(false);
   const [newItemText, setNewItemText] = useState('');
-  const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
+  const [loadingChecklist, setLoadingChecklist] = useState(true);
+  const [addingItem, setAddingItem] = useState(false);
 
-  const handleAddChecklistItem = () => {
-    if (newItemText.trim()) {
-      setChecklistItems([...checklistItems, newItemText]);
-      setCheckedItems([...checkedItems, false]);
-      setNewItemText('');
-      setShowAddItemInput(false);
-      console.log('✅ Added checklist item:', newItemText);
+  // Load checklist from database
+  useEffect(() => {
+    if (!caseData?.id || !userToken) return;
+
+    const loadChecklist = async () => {
+      try {
+        setLoadingChecklist(true);
+        const response = await fetch(
+          `https://lawyerbuddy-production.up.railway.app/cases/${caseData.id}/checklist`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${userToken}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+        if (data.success) {
+          setChecklistItems(data.items || []);
+          console.log('✅ Loaded checklist:', data.items);
+        }
+      } catch (err: any) {
+        console.error('❌ Error loading checklist:', err.message);
+      } finally {
+        setLoadingChecklist(false);
+      }
+    };
+
+    loadChecklist();
+  }, [caseData?.id, userToken]);
+
+  const handleAddChecklistItem = async () => {
+    if (!newItemText.trim()) return;
+    if (!caseData?.id || !userToken) {
+      alert('Not authenticated or case not loaded');
+      return;
+    }
+
+    try {
+      setAddingItem(true);
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseData.id}/checklist`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userToken}`,
+          },
+          body: JSON.stringify({
+            label: newItemText.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setChecklistItems([...checklistItems, data.item]);
+        setNewItemText('');
+        setShowAddItemInput(false);
+        console.log('✅ Added checklist item:', data.item);
+      } else {
+        alert('Failed to add item: ' + data.error);
+      }
+    } catch (err: any) {
+      alert('Error adding checklist item: ' + err.message);
+      console.error('❌ Error adding checklist item:', err);
+    } finally {
+      setAddingItem(false);
     }
   };
 
-  const toggleChecklistItem = (index: number) => {
-    const updated = [...checkedItems];
-    updated[index] = !updated[index];
-    setCheckedItems(updated);
+  const toggleChecklistItem = async (item: any) => {
+    if (!userToken) return;
+
+    // Store original state for rollback
+    const originalItem = item;
+    const newIsComplete = !item.is_complete;
+
+    // Optimistic update - update UI immediately using functional setState
+    setChecklistItems(prevItems =>
+      prevItems.map(i => i.id === item.id ? { ...i, is_complete: newIsComplete } : i)
+    );
+    console.log('✅ Toggled checklist item (optimistic):', item.id, newIsComplete);
+
+    try {
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseData.id}/checklist/${item.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userToken}`,
+          },
+          body: JSON.stringify({
+            isComplete: newIsComplete,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        // Sync with server response using functional setState
+        setChecklistItems(prevItems =>
+          prevItems.map(i => i.id === item.id ? data.item : i)
+        );
+        console.log('✅ Checklist item confirmed by server:', data.item);
+      } else {
+        // Revert on API failure using functional setState
+        setChecklistItems(prevItems =>
+          prevItems.map(i => i.id === item.id ? originalItem : i)
+        );
+        alert('Failed to update checklist item');
+      }
+    } catch (err: any) {
+      // Revert on network error using functional setState
+      setChecklistItems(prevItems =>
+        prevItems.map(i => i.id === item.id ? originalItem : i)
+      );
+      console.error('❌ Error toggling checklist item:', err);
+      alert('Error updating checklist item');
+    }
   };
 
   // Guard against null/undefined caseData
@@ -162,17 +301,18 @@ function CaseDetailScreen({
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.detailHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.detailTitle}>{caseData?.title || 'Untitled Case'}</Text>
-        <View style={{ width: 60 }} />
-      </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.detailHeader}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.detailTitle}>{caseData?.title || 'Untitled Case'}</Text>
+          <View style={{ width: 60 }} />
+        </View>
 
-      <ScrollView style={styles.detailContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.detailContent} showsVerticalScrollIndicator={false}>
         {/* Case Information */}
         <View style={styles.detailSection}>
           <Text style={styles.detailSectionTitle}>Case Information</Text>
@@ -238,27 +378,33 @@ function CaseDetailScreen({
             </View>
           )}
 
-          {checklistItems.length === 0 && !showAddItemInput ? (
+          {loadingChecklist ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <ActivityIndicator color="#0066cc" size="large" />
+              <Text style={{ color: '#888888', marginTop: 12 }}>Loading checklist...</Text>
+            </View>
+          ) : checklistItems.length === 0 && !showAddItemInput ? (
             <Text style={styles.emptyChecklistText}>No checklist items yet</Text>
           ) : (
-            checklistItems.map((item, index) => (
+            checklistItems.map((item) => (
               <TouchableOpacity
-                key={index}
+                key={item.id}
                 style={styles.checklistItem}
-                onPress={() => toggleChecklistItem(index)}
+                onPress={() => toggleChecklistItem(item)}
+                disabled={addingItem}
               >
                 <View style={styles.checklistCheckbox}>
-                  {checkedItems[index] && (
+                  {item.is_complete && (
                     <Text style={styles.checklistCheckmark}>✓</Text>
                   )}
                 </View>
                 <Text
                   style={[
                     styles.checklistItemText,
-                    checkedItems[index] && styles.checklistItemCompleted,
+                    item.is_complete && styles.checklistItemCompleted,
                   ]}
                 >
-                  {item}
+                  {item.label}
                 </Text>
               </TouchableOpacity>
             ))
@@ -284,16 +430,193 @@ function CaseDetailScreen({
         styles={styles}
       />
 
-      {/* Invite Client Button */}
-      <View style={styles.detailBottomButton}>
-        <TouchableOpacity
-          style={styles.inviteButton}
-          onPress={() => setShowInviteModal(true)}
-        >
-          <Text style={styles.inviteButtonText}>Invite Client</Text>
-        </TouchableOpacity>
+        {/* Invite Client Button */}
+        <View style={styles.detailBottomButton}>
+          <TouchableOpacity
+            style={styles.inviteButton}
+            onPress={() => setShowInviteModal(true)}
+          >
+            <Text style={styles.inviteButtonText}>Invite Client</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
+  );
+}
+
+// Client Portal Screen Component
+function ClientPortalScreen({
+  caseData,
+  userToken,
+  onLogout,
+  styles,
+}: {
+  caseData: any;
+  userToken: string | null;
+  onLogout: () => void;
+  styles: any;
+}) {
+  const [checklistItems, setChecklistItems] = useState<any[]>([]);
+  const [loadingChecklist, setLoadingChecklist] = useState(true);
+
+  // Load checklist when case is selected
+  useEffect(() => {
+    if (!caseData?.id || !userToken) return;
+
+    const loadChecklist = async () => {
+      try {
+        setLoadingChecklist(true);
+        const response = await fetch(
+          `https://lawyerbuddy-production.up.railway.app/cases/${caseData.id}/checklist`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${userToken}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+        if (data.success) {
+          setChecklistItems(data.items || []);
+        }
+      } catch (err: any) {
+        console.error('Error loading checklist:', err);
+      } finally {
+        setLoadingChecklist(false);
+      }
+    };
+
+    loadChecklist();
+  }, [caseData?.id, userToken]);
+
+  if (!caseData) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>My Cases</Text>
+          <TouchableOpacity onPress={onLogout}>
+            <Text style={styles.logoutButton}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#888888', fontSize: 16 }}>No cases assigned yet</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>My Case</Text>
+            <Text style={styles.subtitle}>{caseData.title}</Text>
+          </View>
+          <TouchableOpacity onPress={onLogout}>
+            <Text style={styles.logoutButton}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Case Info */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Case Information</Text>
+            <View style={{ paddingLeft: 16 }}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: '#888888', fontSize: 12 }}>Type</Text>
+                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
+                  {caseData.case_type}
+                </Text>
+              </View>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: '#888888', fontSize: 12 }}>Status</Text>
+                <Text style={{ color: '#22c55e', fontSize: 16, fontWeight: '600' }}>
+                  {(caseData.status || 'active').toUpperCase()}
+                </Text>
+              </View>
+              <View>
+                <Text style={{ color: '#888888', fontSize: 12 }}>Your Lawyer</Text>
+                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
+                  {caseData.lawyer_id ? 'John Von Schlichten' : 'Not assigned'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Checklist */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Your Checklist</Text>
+
+            {loadingChecklist ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <ActivityIndicator color="#0066cc" size="large" />
+              </View>
+            ) : checklistItems.length === 0 ? (
+              <Text style={{ color: '#888888', marginLeft: 16, marginTop: 8 }}>
+                No items yet
+              </Text>
+            ) : (
+              checklistItems.map((item) => (
+                <View
+                  key={item.id}
+                  style={{
+                    flexDirection: 'row',
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    alignItems: 'center',
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#1a1a1a',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderWidth: 2,
+                      borderColor: item.is_complete ? '#22c55e' : '#0066cc',
+                      borderRadius: 4,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      backgroundColor: '#0a0a0a',
+                      marginRight: 12,
+                    }}
+                  >
+                    {item.is_complete && <Text style={{ color: '#22c55e', fontSize: 14 }}>✓</Text>}
+                  </View>
+                  <Text
+                    style={{
+                      color: item.is_complete ? '#666666' : '#ffffff',
+                      textDecorationLine: item.is_complete ? 'line-through' : 'none',
+                      flex: 1,
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Messages Section Placeholder */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Messages</Text>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
+              <Text style={{ color: '#888888', fontSize: 14, marginBottom: 12 }}>
+                💬 Messaging coming soon
+              </Text>
+              <Text style={{ color: '#666666', fontSize: 12, textAlign: 'center' }}>
+                You'll be able to message your lawyer directly from here
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -311,6 +634,8 @@ function NewCaseModal({
   newCaseLoading,
   newCaseError,
   styles,
+  selectedTemplate,
+  setSelectedTemplate,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -324,6 +649,8 @@ function NewCaseModal({
   newCaseLoading: boolean;
   newCaseError: string;
   styles: any;
+  selectedTemplate: string;
+  setSelectedTemplate: (template: string) => void;
 }) {
   return (
     <Modal
@@ -387,6 +714,50 @@ function NewCaseModal({
               </View>
             </View>
 
+            {/* Template Selection */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Checklist Template (Optional)</Text>
+              <View style={styles.caseTypePicker}>
+                <TouchableOpacity
+                  style={[
+                    styles.caseTypeOption,
+                    selectedTemplate === '' && styles.caseTypeOptionSelected,
+                  ]}
+                  onPress={() => setSelectedTemplate('')}
+                  disabled={newCaseLoading}
+                >
+                  <Text
+                    style={[
+                      styles.caseTypeOptionText,
+                      selectedTemplate === '' && styles.caseTypeOptionTextSelected,
+                    ]}
+                  >
+                    None
+                  </Text>
+                </TouchableOpacity>
+                {Object.keys(CHECKLIST_TEMPLATES).map((templateName) => (
+                  <TouchableOpacity
+                    key={templateName}
+                    style={[
+                      styles.caseTypeOption,
+                      selectedTemplate === templateName && styles.caseTypeOptionSelected,
+                    ]}
+                    onPress={() => setSelectedTemplate(templateName)}
+                    disabled={newCaseLoading}
+                  >
+                    <Text
+                      style={[
+                        styles.caseTypeOptionText,
+                        selectedTemplate === templateName && styles.caseTypeOptionTextSelected,
+                      ]}
+                    >
+                      {templateName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             {/* Docket Number */}
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Docket Number (Optional)</Text>
@@ -435,6 +806,7 @@ export default function App() {
   const [cases, setCases] = useState<any[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
   const [userToken, setUserToken] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // New Case Form State
   const [showNewCaseForm, setShowNewCaseForm] = useState(false);
@@ -443,6 +815,7 @@ export default function App() {
   const [newCaseDocket, setNewCaseDocket] = useState('');
   const [newCaseLoading, setNewCaseLoading] = useState(false);
   const [newCaseError, setNewCaseError] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   // Case Detail State
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -547,10 +920,44 @@ export default function App() {
       if (response.ok && data.success) {
         console.log('✅ Case created successfully:', data.case);
 
+        // Apply checklist template if selected
+        if (selectedTemplate && CHECKLIST_TEMPLATES[selectedTemplate]) {
+          const caseId = data.case.id;
+          const templateItems = CHECKLIST_TEMPLATES[selectedTemplate];
+
+          console.log(`📋 Applying template "${selectedTemplate}" with ${templateItems.length} items`);
+
+          // Add each template item in sequence
+          for (const itemLabel of templateItems) {
+            try {
+              const itemResponse = await fetch(
+                `https://lawyerbuddy-production.up.railway.app/cases/${caseId}/checklist`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ label: itemLabel }),
+                }
+              );
+              const itemData = await itemResponse.json();
+              if (itemData.success) {
+                console.log(`✅ Added template item: ${itemLabel}`);
+              } else {
+                console.error(`❌ Failed to add template item: ${itemLabel}`);
+              }
+            } catch (err: any) {
+              console.error(`❌ Error adding template item "${itemLabel}":`, err);
+            }
+          }
+        }
+
         // Reset form and dismiss modal
         setNewCaseTitle('');
         setNewCaseType('Family Law');
         setNewCaseDocket('');
+        setSelectedTemplate('');
         setShowNewCaseForm(false);
 
         // Show success alert
@@ -601,6 +1008,9 @@ export default function App() {
 
       const data = await response.json();
 
+      console.log('Login response data:', JSON.stringify(data?.profile, null, 2));
+      console.log('Full response:', JSON.stringify(data, null, 2));
+
       if (!response.ok) {
         setError('Invalid email or password');
         setLoading(false);
@@ -608,8 +1018,13 @@ export default function App() {
       }
 
       // Extract role and name with null safety
-      const role = data?.profile?.role || data?.user?.role || 'lawyer';
+      // Use only profile.role (app role: 'client' or 'lawyer'), NOT user.role (Supabase JWT role: 'authenticated')
+      const role = data?.profile?.role || 'lawyer';
       const name = (data?.profile?.full_name || data?.user?.email || 'User').trim();
+
+      console.log('Role extracted:', role);
+      console.log('Name extracted:', name);
+      console.log('Profile object:', data?.profile);
 
       // Validate name is not empty
       if (!name || name === '') {
@@ -627,6 +1042,8 @@ export default function App() {
         full_name: name,
         role: role,
       });
+      setUserRole(role);
+      setUserToken(data.session.access_token);
       setSuccess(true);
       setEmail('');
       setPassword('');
@@ -754,6 +1171,18 @@ export default function App() {
     }
   }
 
+  // Client Portal Screen
+  if (success && userData && userData.role === 'client') {
+    return (
+      <ClientPortalScreen
+        caseData={cases.length > 0 ? cases[0] : null}
+        userToken={userToken}
+        onLogout={handleLogout}
+        styles={styles}
+      />
+    );
+  }
+
   // Lawyer Dashboard Screen
   if (success && userData) {
     return (
@@ -771,6 +1200,8 @@ export default function App() {
           newCaseLoading={newCaseLoading}
           newCaseError={newCaseError}
           styles={styles}
+          selectedTemplate={selectedTemplate}
+          setSelectedTemplate={setSelectedTemplate}
         />
 
         {/* Header */}
@@ -789,7 +1220,11 @@ export default function App() {
         </View>
 
         {/* Main Content */}
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           {/* My Cases Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>My Cases</Text>
@@ -946,9 +1381,11 @@ const styles = StyleSheet.create({
   // Login Screen Styles
   content: {
     flex: 1,
-    justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingVertical: 60,
+  },
+  contentContainer: {
+    justifyContent: 'space-between',
   },
   logoContainer: {
     alignItems: 'center',
@@ -1296,13 +1733,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#1a1a1a',
   },
   backButton: {
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backButtonText: {
     fontSize: 16,

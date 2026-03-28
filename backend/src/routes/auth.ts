@@ -74,6 +74,7 @@ router.post('/lawyer-signup', async (req: Request, res: Response) => {
  * Response:
  * - session: Session object with access/refresh tokens
  * - user: Authenticated user object
+ * - profile: User profile with role ('lawyer' or 'client')
  * - accessToken: JWT token for API requests
  */
 router.post('/login', async (req: Request, res: Response) => {
@@ -88,6 +89,17 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const result = await authService.login({ email, password });
 
+    // Fetch user's profile from database to include role
+    const { data: profile, error: profileError } = await getSupabaseServiceRole()
+      .from('profiles')
+      .select('*')
+      .eq('id', result.user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+    }
+
     // WIRED IN: Log login action for audit trail
     await auditLog.logLogin(result.user.id, req.ip);
 
@@ -95,6 +107,7 @@ router.post('/login', async (req: Request, res: Response) => {
       success: true,
       session: result.session,
       user: result.user,
+      profile: profile || { id: result.user.id, role: 'lawyer' },
       accessToken: result.session.access_token,
     });
   } catch (error: any) {

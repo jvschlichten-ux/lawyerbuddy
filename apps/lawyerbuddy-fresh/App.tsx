@@ -2173,33 +2173,37 @@ export default function App() {
 
   // Login Screen
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       {/* Language Toggle */}
       <View style={styles.languageToggle}>
         <TouchableOpacity
           style={[styles.langButton, language === 'en' && styles.langButtonActive]}
           onPress={() => {
+            console.log('🌐 Language switched to EN');
             setLanguage('en');
             AsyncStorage.setItem('appLanguage', 'en');
           }}
+          activeOpacity={0.7}
         >
           <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.langButton, language === 'es' && styles.langButtonActive]}
           onPress={() => {
+            console.log('🌐 Language switched to ES');
             setLanguage('es');
             AsyncStorage.setItem('appLanguage', 'es');
           }}
+          activeOpacity={0.7}
         >
           <Text style={[styles.langText, language === 'es' && styles.langTextActive]}>ES</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.content}
+      >
         {/* Logo */}
         <View style={styles.logoContainer}>
           <View style={styles.logoCircle}>
@@ -2265,7 +2269,8 @@ export default function App() {
           </TouchableOpacity>
         </View>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 

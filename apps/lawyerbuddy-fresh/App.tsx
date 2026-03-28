@@ -249,20 +249,27 @@ export default function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        console.log('🔄 Starting app initialization...');
+
         // Load remembered email
-        const rememberedEmail = await AsyncStorage.getItem('rememberedEmail');
-        if (rememberedEmail) {
-          setEmail(rememberedEmail);
+        try {
+          const rememberedEmail = await AsyncStorage.getItem('rememberedEmail');
+          if (rememberedEmail) {
+            console.log('📧 Loaded remembered email');
+            setEmail(rememberedEmail);
+          }
+        } catch (err) {
+          console.error('Error loading remembered email:', err);
         }
 
         // Check for existing token and auto-login
-        const token = await AsyncStorage.getItem('userToken');
-        if (token) {
-          console.log('🔐 Found existing token, attempting auto-login...');
-          setUserToken(token);
+        try {
+          const token = await AsyncStorage.getItem('userToken');
+          if (token) {
+            console.log('🔐 Found existing token, attempting auto-login...');
+            setUserToken(token);
 
-          // Try to fetch user data to verify token is still valid
-          try {
+            // Try to fetch user data to verify token is still valid
             const response = await fetch('https://lawyerbuddy-production.up.railway.app/profile', {
               method: 'GET',
               headers: {
@@ -273,28 +280,45 @@ export default function App() {
 
             if (response.ok) {
               const data = await response.json();
+              console.log('✅ Token verified, setting user data');
               const role = data?.profile?.role || data?.user?.role || 'lawyer';
               const name = data?.profile?.full_name || data?.user?.email || 'User';
 
+              if (!name || name.trim() === '') {
+                console.warn('⚠️ Invalid name from response, using default');
+              }
+
               setUserData({
-                full_name: name,
+                full_name: (name || 'User').trim(),
                 role: role,
               });
               setSuccess(true);
               console.log('✅ Auto-login successful');
             } else {
-              console.log('Token expired or invalid');
+              console.warn('⚠️ Token verification failed (status:', response.status + ')');
               await AsyncStorage.removeItem('userToken');
               await AsyncStorage.removeItem('userRole');
+              setSuccess(false);
+              setUserData(null);
             }
-          } catch (err) {
-            console.error('Error verifying token:', err);
+          } else {
+            console.log('ℹ️ No existing token found');
+          }
+        } catch (err) {
+          console.error('❌ Error verifying token:', err);
+          try {
             await AsyncStorage.removeItem('userToken');
             await AsyncStorage.removeItem('userRole');
+          } catch (cleanupErr) {
+            console.error('Error cleaning up storage:', cleanupErr);
           }
+          setSuccess(false);
+          setUserData(null);
         }
       } catch (err) {
-        console.error('Error during app initialization:', err);
+        console.error('❌ Unexpected error during app initialization:', err);
+        setSuccess(false);
+        setUserData(null);
       } finally {
         setCheckingSession(false);
       }
@@ -546,7 +570,11 @@ export default function App() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>Good {getTimeOfDay()},</Text>
-            <Text style={styles.userName}>{userData.full_name.split(' ')[0]}</Text>
+            <Text style={styles.userName}>
+              {userData && userData.full_name
+                ? userData.full_name.split(' ')[0]
+                : 'Lawyer'}
+            </Text>
           </View>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Logout</Text>

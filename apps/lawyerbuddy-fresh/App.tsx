@@ -1,7 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard, SafeAreaView, Linking, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
+// import * as Notifications from 'expo-notifications'; // TODO: Set up push notifications
 
 // 🌐 Translations
 const TRANSLATIONS = {
@@ -525,6 +525,8 @@ function CaseDetailScreen({
   addCourtDate,
   caseDetailTab,
   setCaseDetailTab,
+  deleteMessage,
+  deleteCourtDate,
 }: {
   caseData: any;
   onBack: () => void;
@@ -558,6 +560,8 @@ function CaseDetailScreen({
   addCourtDate: (caseId: string) => void;
   caseDetailTab: 'checklist' | 'messages' | 'documents' | 'dates';
   setCaseDetailTab: (tab: 'checklist' | 'messages' | 'documents' | 'dates') => void;
+  deleteMessage: (id: string) => void;
+  deleteCourtDate: (id: string) => void;
 }) {
   const [checklistItems, setChecklistItems] = useState<any[]>([]);
   const [showAddItemInput, setShowAddItemInput] = useState(false);
@@ -1832,7 +1836,7 @@ export default function App() {
 
   // Case List Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('active');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived' | 'trash'>('active');
   const [showArchived, setShowArchived] = useState(false);
 
   // Invite Client Modal State
@@ -2704,6 +2708,8 @@ export default function App() {
           addCourtDate={addCourtDate}
           caseDetailTab={caseDetailTab}
           setCaseDetailTab={setCaseDetailTab}
+          deleteMessage={deleteMessage}
+          deleteCourtDate={deleteCourtDate}
         />
       );
     } else {

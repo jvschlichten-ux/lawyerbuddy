@@ -1515,7 +1515,7 @@ function NewCaseModal({
                 <TextInput
                   style={styles.formInput}
                   placeholder={t('caseTypePlaceholder')}
-                  placeholderTextColor="#666666"
+                  placeholderTextColor="#555555"
                   value={newCaseType}
                   onChangeText={(text) => {
                     setNewCaseType(text);
@@ -1837,7 +1837,7 @@ export default function App() {
   // New Case Form State
   const [showNewCaseForm, setShowNewCaseForm] = useState(false);
   const [newCaseTitle, setNewCaseTitle] = useState('');
-  const [newCaseType, setNewCaseType] = useState('Family Law');
+  const [newCaseType, setNewCaseType] = useState('');
   const [newCaseDocket, setNewCaseDocket] = useState('');
   const [newCaseLoading, setNewCaseLoading] = useState(false);
   const [newCaseError, setNewCaseError] = useState('');
@@ -1849,7 +1849,6 @@ export default function App() {
   // Case List Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived' | 'trash'>('active');
-  const [showArchived, setShowArchived] = useState(false);
 
   // Invite Client Modal State
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -1880,6 +1879,10 @@ export default function App() {
 
   // Tab State for Case Detail
   const [caseDetailTab, setCaseDetailTab] = useState<'checklist' | 'messages' | 'documents' | 'dates'>('checklist');
+
+  // Multi-select Cases State
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedCases, setSelectedCases] = useState<Set<string>>(new Set());
 
   // Load language preference and saved email on app startup
   useEffect(() => {
@@ -2516,72 +2519,55 @@ export default function App() {
   };
 
   const handleCaseLongPress = (caseId: string, caseStatus: string, isDeleted: boolean = false) => {
-    const buttons: any[] = [];
-
-    if (isDeleted) {
-      // Trash case options
-      buttons.push({
-        text: t('recover'),
-        onPress: () => recoverCase(caseId),
-        style: 'default',
-      });
-
-      buttons.push({
-        text: t('deletePermanently'),
-        onPress: () => {
-          Alert.alert(t('deletePermanently'), t('deleteConfirm'), [
-            { text: t('cancel'), onPress: () => {}, style: 'cancel' },
-            {
-              text: t('delete'),
-              onPress: () => deleteCase(caseId, true),
-              style: 'destructive',
-            },
-          ]);
-        },
-        style: 'destructive',
-      });
-    } else {
-      // Normal case options
-      if (caseStatus === 'archived') {
-        buttons.push({
-          text: t('restore'),
-          onPress: () => restoreCase(caseId),
-          style: 'default',
-        });
-      } else {
-        buttons.push({
-          text: t('archive'),
-          onPress: () => archiveCase(caseId),
-          style: 'default',
-        });
-      }
-
-      buttons.push({
-        text: t('delete'),
-        onPress: () => {
-          Alert.alert(t('delete'), t('recoveryWindow'), [
-            { text: t('cancel'), onPress: () => {}, style: 'cancel' },
-            {
-              text: t('delete'),
-              onPress: () => deleteCase(caseId, false),
-              style: 'destructive',
-            },
-          ]);
-        },
-        style: 'destructive',
-      });
+    // In selection mode, toggle selection on long press
+    if (selectionMode) {
+      toggleCaseSelection(caseId);
+      return;
     }
 
-    buttons.push({
-      text: t('cancel'),
-      style: 'cancel',
-    });
+    // Enter selection mode on first long press
+    setSelectionMode(true);
+    setSelectedCases(new Set([caseId]));
+  };
 
-    Alert.alert(
-      isDeleted ? t('trash') : t('archive'), // Title
-      isDeleted ? t('recovery') : `${t('caseType')}: Choose an action`,
-      buttons
-    );
+  const toggleCaseSelection = (caseId: string) => {
+    setSelectedCases(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(caseId)) {
+        newSet.delete(caseId);
+      } else {
+        newSet.add(caseId);
+      }
+      return newSet;
+    });
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedCases(new Set());
+  };
+
+  const archiveSelectedCases = async () => {
+    for (const caseId of selectedCases) {
+      await archiveCase(caseId);
+    }
+    exitSelectionMode();
+  };
+
+  const deleteSelectedCases = async () => {
+    Alert.alert(t('delete'), 'Delete selected cases?', [
+      { text: t('cancel'), onPress: () => {}, style: 'cancel' },
+      {
+        text: t('delete'),
+        onPress: async () => {
+          for (const caseId of selectedCases) {
+            await deleteCase(caseId, false);
+          }
+          exitSelectionMode();
+        },
+        style: 'destructive',
+      },
+    ]);
   };
 
   const handleLogout = async () => {
@@ -2932,60 +2918,92 @@ export default function App() {
               </View>
             ) : filteredCases.length > 0 ? (
               <View style={styles.casesList}>
-                {filteredCases.map((caseItem, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.caseCard,
-                      { borderLeftColor: getCaseTypeColor(caseItem.case_type || 'Other') },
-                    ]}
-                    onPress={() => {
-                      console.log('📂 Navigating to case detail:', caseItem.id, caseItem.title);
-                      setSelectedCaseId(caseItem.id);
-                    }}
-                    onLongPress={() => {
-                      console.log('📋 Long press on case:', caseItem.id);
-                      handleCaseLongPress(caseItem.id, caseItem.status || 'active', caseItem.status === 'deleted');
-                    }}
-                    activeOpacity={0.7}
-                    delayLongPress={500}
-                  >
-                    <View style={styles.caseCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 20, marginRight: 10 }}>
-                            {getCaseTypeEmoji(caseItem.case_type || 'Other')}
+                {filteredCases.map((caseItem, index) => {
+                  const isSelected = selectedCases.has(caseItem.id);
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.caseCard,
+                        {
+                          borderLeftColor: getCaseTypeColor(caseItem.case_type || 'Other'),
+                          opacity: caseItem.status === 'archived' ? 0.6 : 1,
+                          backgroundColor: isSelected ? '#1a3a52' : '#1a1a1a',
+                          borderColor: isSelected ? '#0066cc' : '#333333',
+                          borderWidth: isSelected ? 2 : 1,
+                        },
+                      ]}
+                      onPress={() => {
+                        // In selection mode, toggle selection on tap
+                        if (selectionMode) {
+                          toggleCaseSelection(caseItem.id);
+                        } else {
+                          console.log('📂 Navigating to case detail:', caseItem.id, caseItem.title);
+                          setSelectedCaseId(caseItem.id);
+                        }
+                      }}
+                      onLongPress={() => {
+                        console.log('📋 Long press on case:', caseItem.id);
+                        handleCaseLongPress(caseItem.id, caseItem.status || 'active', caseItem.status === 'deleted');
+                      }}
+                      activeOpacity={0.7}
+                      delayLongPress={500}
+                    >
+                      <View style={styles.caseCardHeader}>
+                        {/* Checkbox - visible only in selection mode */}
+                        {selectionMode && (
+                          <TouchableOpacity
+                            style={[
+                              styles.checkbox,
+                              isSelected && styles.checkboxChecked,
+                            ]}
+                            onPress={() => toggleCaseSelection(caseItem.id)}
+                            activeOpacity={0.7}
+                          >
+                            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Title and Emoji */}
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 20, marginRight: 10 }}>
+                              {getCaseTypeEmoji(caseItem.case_type || 'Other')}
+                            </Text>
+                            <Text style={styles.caseTitle}>{caseItem.title || t('untitledCase')}</Text>
+                          </View>
+                        </View>
+
+                        {/* Status Badge */}
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: getStatusColor(caseItem.status) + '20' },
+                          ]}
+                        >
+                          <Text style={[styles.statusText, { color: getStatusColor(caseItem.status) }]}>
+                            {getStatusLabel(caseItem.status || 'active')}
                           </Text>
-                          <Text style={styles.caseTitle}>{caseItem.title || t('untitledCase')}</Text>
                         </View>
                       </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(caseItem.status) + '20' },
-                        ]}
-                      >
-                        <Text style={[styles.statusText, { color: getStatusColor(caseItem.status) }]}>
-                          {getStatusLabel(caseItem.status || 'active')}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.caseType}>
-                      {caseItem.case_type || t('general')}
-                      {caseItem.docket_number ? ` • Docket: ${caseItem.docket_number}` : ''}
-                    </Text>
-                    <Text style={styles.caseDetails}>
-                      {caseItem.client?.full_name ? `${t('client')}: ${caseItem.client.full_name}` : t('noClient')}
-                    </Text>
-                    {checklistProgress[caseItem.id] && (
-                      <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#333333' }}>
-                        <Text style={{ color: '#888888', fontSize: 13, fontWeight: '500' }}>
-                          ✓ {checklistProgress[caseItem.id].completed}/{checklistProgress[caseItem.id].total} items complete
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
+
+                      <Text style={styles.caseType}>
+                        {caseItem.case_type || t('general')}
+                        {caseItem.docket_number ? ` • Docket: ${caseItem.docket_number}` : ''}
+                      </Text>
+                      <Text style={styles.caseDetails}>
+                        {caseItem.client?.full_name ? `${t('client')}: ${caseItem.client.full_name}` : t('noClient')}
+                      </Text>
+                      {checklistProgress[caseItem.id] && (
+                        <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#333333' }}>
+                          <Text style={{ color: '#888888', fontSize: 13, fontWeight: '500' }}>
+                            ✓ {checklistProgress[caseItem.id].completed}/{checklistProgress[caseItem.id].total} items complete
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             ) : (
               <View style={styles.emptyState}>
@@ -3002,31 +3020,53 @@ export default function App() {
               </View>
             )}
 
-            {/* Show/Hide Archived Toggle */}
-            {cases.some((c) => c.status === 'archived') && statusFilter !== 'archived' && (
-              <TouchableOpacity
-                style={styles.toggleArchivedButton}
-                onPress={() => setShowArchived(!showArchived)}
-              >
-                <Text style={styles.toggleArchivedText}>
-                  {showArchived ? t('hideArchived') : t('showArchived')}
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
 
           <View style={{ height: 100 }} />
         </ScrollView>
 
+        {/* Multi-select Toolbar - Visible only in selection mode */}
+        {selectionMode && (
+          <View style={styles.selectionToolbar}>
+            <View style={styles.selectionInfo}>
+              <Text style={styles.selectionText}>
+                {selectedCases.size} {selectedCases.size === 1 ? 'case' : 'cases'} selected
+              </Text>
+            </View>
+            <View style={styles.selectionActions}>
+              <TouchableOpacity
+                style={[styles.toolbarButton, styles.toolbarButtonSecondary]}
+                onPress={exitSelectionMode}
+              >
+                <Text style={styles.toolbarButtonText}>{t('cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.toolbarButton, styles.toolbarButtonWarning]}
+                onPress={archiveSelectedCases}
+              >
+                <Text style={styles.toolbarButtonText}>{t('archive')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.toolbarButton, styles.toolbarButtonDanger]}
+                onPress={deleteSelectedCases}
+              >
+                <Text style={styles.toolbarButtonText}>{t('delete')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* New Case Button - Fixed at Bottom */}
-        <View style={styles.bottomButton}>
-          <TouchableOpacity
-            style={styles.newCaseButton}
-            onPress={() => setShowNewCaseForm(true)}
-          >
-            <Text style={styles.newCaseButtonText}>+ {t('newCase')}</Text>
-          </TouchableOpacity>
-        </View>
+        {!selectionMode && (
+          <View style={styles.bottomButton}>
+            <TouchableOpacity
+              style={styles.newCaseButton}
+              onPress={() => setShowNewCaseForm(true)}
+            >
+              <Text style={styles.newCaseButtonText}>+ {t('newCase')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -3900,5 +3940,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  // Multi-select Styles
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#555555',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0a',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#0066cc',
+    borderColor: '#0066cc',
+  },
+  checkmark: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  selectionToolbar: {
+    backgroundColor: '#1a1a1a',
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectionInfo: {
+    flex: 1,
+  },
+  selectionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  toolbarButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toolbarButtonSecondary: {
+    backgroundColor: '#444444',
+  },
+  toolbarButtonWarning: {
+    backgroundColor: '#f59e0b',
+  },
+  toolbarButtonDanger: {
+    backgroundColor: '#dc2626',
+  },
+  toolbarButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+    textTransform: 'uppercase',
   },
 });

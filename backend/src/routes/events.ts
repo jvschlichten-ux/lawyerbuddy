@@ -76,9 +76,13 @@ router.post('/', verifyJWT, async (req: Request, res: Response) => {
       });
     }
 
-    if (caseData.client_id !== userId) {
+    // Allow both lawyer (creating deadlines/court dates) and client (logging incidents) to create events
+    const isLawyer = caseData.lawyer_id === userId;
+    const isClient = caseData.client_id === userId;
+
+    if (!isLawyer && !isClient) {
       return res.status(403).json({
-        error: 'Only the case client can create events',
+        error: 'Only case members can create events',
       });
     }
 

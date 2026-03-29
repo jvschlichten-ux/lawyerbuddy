@@ -1198,10 +1198,12 @@ function CaseDetailScreen({
                 style={{ backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
                 onPress={() => {
                   const selectedDate = new Date(selectedYear, selectedMonth, selectedDay);
+                  // Format date as ISO string at midnight
+                  const isoDate = selectedDate.toISOString();
                   setPickedDate(selectedDate);
-                  setNewDateValue(selectedDate.toISOString().split('T')[0]);
-                  addCourtDate(caseData?.id);
-                  console.log('📅 Date added:', selectedDate.toISOString().split('T')[0]);
+                  console.log('📅 Adding court date:', isoDate);
+                  // Pass the date directly to avoid async state issues
+                  addCourtDate(caseData?.id, isoDate, newDateLabel, newDateSeverity);
                 }}
               >
                 <Text style={{ color: '#ffffff', fontWeight: '600' }}>{t('addDate')}</Text>
@@ -2263,8 +2265,15 @@ export default function App() {
     }
   };
 
-  const addCourtDate = async (caseId: string) => {
-    if (!newDateLabel.trim() || !newDateValue || !userToken) return;
+  const addCourtDate = async (caseId: string, dateValue?: string, dateLabel?: string, severity?: string) => {
+    const label = dateLabel || newDateLabel;
+    const date = dateValue || newDateValue;
+    const sev = severity || newDateSeverity;
+
+    if (!label.trim() || !date || !userToken) {
+      console.warn('⚠️ Cannot add court date: missing required fields');
+      return;
+    }
 
     try {
       const response = await fetch(
@@ -2276,29 +2285,35 @@ export default function App() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            caseId,
-            title: newDateLabel,
-            eventType: 'deadline',
-            occurredAt: new Date(newDateValue).toISOString(),
-            narrative: newDateLabel,
-            severity: newDateSeverity,
-            privacyLevel: 'shared_with_lawyer',
+            case_id: caseId,
+            title: label,
+            event_type: 'deadline',
+            occurred_at: date,
+            narrative: label,
+            severity: sev,
+            privacy_level: 'shared_with_lawyer',
           }),
         }
       );
 
       const data = await response.json();
-      if (data.success) {
+      console.log('📡 Events API response:', JSON.stringify(data, null, 2));
+
+      if (data.success && data.event) {
         setCourtDates([...courtDates, data.event].sort((a, b) =>
           new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()
         ));
         setNewDateLabel('');
         setNewDateValue('');
         setShowAddDateModal(false);
-        console.log('✅ Court date added');
+        console.log('✅ Court date added successfully');
+      } else {
+        console.error('❌ Add date failed:', data);
+        alert('Failed to add court date: ' + (data.error || 'Unknown error'));
       }
     } catch (err: any) {
-      console.error('Error adding court date:', err);
+      console.error('❌ Error adding court date:', err);
+      alert('Error adding court date: ' + err.message);
     }
   };
 

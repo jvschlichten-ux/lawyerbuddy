@@ -1,0 +1,13 @@
+{
+  "name": "lawyerbuddy-landing",
+  "version": "1.0.0",
+  "description": "LawyerBuddy Landing Page",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "npx http-server . -p 8080 --cors",
+    "dev": "npx http-server . -p 8080 --cors"
+  }
+}

@@ -27,6 +27,48 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', phase: 'Phase 10 - Real-time + Notifications' });
 });
 
+// Admin migration endpoint - execute pending migrations via Supabase
+app.post('/admin/migrate', async (req, res) => {
+  try {
+    const adminKey = req.headers['x-admin-key'];
+    if (adminKey !== process.env.ADMIN_SECRET_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Pending migrations
+    const migrations = [
+      {
+        name: '002_add_case_delete_policy',
+        sql: 'CREATE POLICY IF NOT EXISTS "cases_delete_lawyer_only" ON public.cases FOR DELETE USING (lawyer_id = auth.uid());'
+      }
+    ];
+
+    const results = [];
+
+    for (const migration of migrations) {
+      // Supabase client does not expose raw SQL execution
+      // Provide instructions for manual execution
+      results.push({
+        name: migration.name,
+        status: 'requires_manual_execution',
+        sql: migration.sql,
+        instructions: 'Run this SQL in your Supabase dashboard: https://app.supabase.com/project/jjwiotunqmbphpkpayds/sql'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Migration status retrieved',
+      migrations: results,
+      note: 'Supabase client does not expose raw SQL execution. Copy the SQL above and run in your Supabase dashboard.',
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      error: error.message || 'Migration failed',
+    });
+  }
+});
+
 // Routes
 app.use('/auth', authRoutes);
 app.use('/cases', caseRoutes);

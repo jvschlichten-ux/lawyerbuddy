@@ -1357,6 +1357,7 @@ function NewCaseModal({
   styles,
   selectedTemplate,
   setSelectedTemplate,
+  suggestedCaseTypes = [],
 }: {
   visible: boolean;
   onClose: () => void;
@@ -1372,7 +1373,17 @@ function NewCaseModal({
   styles: any;
   selectedTemplate: string;
   setSelectedTemplate: (template: string) => void;
+  suggestedCaseTypes?: string[];
 }) {
+  const [showCaseTypeSuggestions, setShowCaseTypeSuggestions] = useState(false);
+
+  // Filter suggestions based on current input
+  const filteredSuggestions = newCaseType
+    ? suggestedCaseTypes.filter(type =>
+        type.toLowerCase().includes(newCaseType.toLowerCase()) &&
+        type.toLowerCase() !== newCaseType.toLowerCase()
+      )
+    : suggestedCaseTypes;
   return (
     <Modal
       visible={visible}
@@ -1408,76 +1419,52 @@ function NewCaseModal({
               />
             </View>
 
-            {/* Case Type */}
+            {/* Case Type - Free Text Input with Autocomplete */}
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>{t('caseType')} *</Text>
-              <View style={styles.caseTypePicker}>
-                {getCaseTypes().map((caseType) => (
-                  <TouchableOpacity
-                    key={caseType.value}
-                    style={[
-                      styles.caseTypeOption,
-                      newCaseType === caseType.value && styles.caseTypeOptionSelected,
-                    ]}
-                    onPress={() => setNewCaseType(caseType.value)}
-                    disabled={newCaseLoading}
-                  >
-                    <Text
-                      style={[
-                        styles.caseTypeOptionText,
-                        newCaseType === caseType.value && styles.caseTypeOptionTextSelected,
-                      ]}
-                    >
-                      {caseType.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="e.g., Family Law, Civil, Criminal Defense..."
+                  placeholderTextColor="#666666"
+                  value={newCaseType}
+                  onChangeText={(text) => {
+                    setNewCaseType(text);
+                    setShowCaseTypeSuggestions(text.length > 0);
+                  }}
+                  onFocus={() => setShowCaseTypeSuggestions(newCaseType.length > 0)}
+                  onBlur={() => setTimeout(() => setShowCaseTypeSuggestions(false), 200)}
+                  editable={!newCaseLoading}
+                  autoCapitalize="words"
+                />
+
+                {/* Autocomplete Suggestions */}
+                {showCaseTypeSuggestions && filteredSuggestions.length > 0 && (
+                  <View style={{ backgroundColor: '#1a1a1a', borderRadius: 8, marginTop: 4, borderWidth: 1, borderColor: '#333333' }}>
+                    {filteredSuggestions.map((suggestion, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          borderBottomWidth: index < filteredSuggestions.length - 1 ? 1 : 0,
+                          borderBottomColor: '#333333',
+                        }}
+                        onPress={() => {
+                          setNewCaseType(suggestion);
+                          setShowCaseTypeSuggestions(false);
+                        }}
+                      >
+                        <Text style={{ color: '#0066cc', fontSize: 14 }}>{suggestion}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
 
-            {/* Template Selection */}
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{t('selectTemplate')}</Text>
-              <View style={styles.caseTypePicker}>
-                <TouchableOpacity
-                  style={[
-                    styles.caseTypeOption,
-                    selectedTemplate === '' && styles.caseTypeOptionSelected,
-                  ]}
-                  onPress={() => setSelectedTemplate('')}
-                  disabled={newCaseLoading}
-                >
-                  <Text
-                    style={[
-                      styles.caseTypeOptionText,
-                      selectedTemplate === '' && styles.caseTypeOptionTextSelected,
-                    ]}
-                  >
-                    {t('cancel')}
-                  </Text>
-                </TouchableOpacity>
-                {Object.keys(getChecklistTemplates()).map((templateName) => (
-                  <TouchableOpacity
-                    key={templateName}
-                    style={[
-                      styles.caseTypeOption,
-                      selectedTemplate === templateName && styles.caseTypeOptionSelected,
-                    ]}
-                    onPress={() => setSelectedTemplate(templateName)}
-                    disabled={newCaseLoading}
-                  >
-                    <Text
-                      style={[
-                        styles.caseTypeOptionText,
-                        selectedTemplate === templateName && styles.caseTypeOptionTextSelected,
-                      ]}
-                    >
-                      {templateName}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            {/* Note: Template selection (pre-made templates) has been removed.
+                Users can now create custom case setups and save them as templates after case creation. */}
 
             {/* Docket Number */}
             <View style={styles.formGroup}>
@@ -2134,44 +2121,13 @@ export default function App() {
       if (response.ok && data.success) {
         console.log('✅ Case created successfully:', data.case);
 
-        // Apply checklist template if selected
-        if (selectedTemplate && getChecklistTemplates()[selectedTemplate]) {
-          const caseId = data.case.id;
-          const templateItems = getChecklistTemplates()[selectedTemplate];
-
-          console.log(`📋 Applying template "${selectedTemplate}" with ${templateItems.length} items`);
-
-          // Add each template item in sequence
-          for (const itemLabel of templateItems) {
-            try {
-              const itemResponse = await fetch(
-                `https://lawyerbuddy-production.up.railway.app/cases/${caseId}/checklist`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                  },
-                  body: JSON.stringify({ label: itemLabel }),
-                }
-              );
-              const itemData = await itemResponse.json();
-              if (itemData.success) {
-                console.log(`✅ Added template item: ${itemLabel}`);
-              } else {
-                console.error(`❌ Failed to add template item: ${itemLabel}`);
-              }
-            } catch (err: any) {
-              console.error(`❌ Error adding template item "${itemLabel}":`, err);
-            }
-          }
-        }
+        // Template selection removed - users can now save custom templates after case creation
+        // Future feature: Add "Save as Template" button after case creation dialog
 
         // Reset form and dismiss modal
         setNewCaseTitle('');
-        setNewCaseType('Family Law');
+        setNewCaseType('');
         setNewCaseDocket('');
-        setSelectedTemplate('');
         setShowNewCaseForm(false);
 
         // Show success alert
@@ -2678,22 +2634,34 @@ export default function App() {
 
     return (
       <SafeAreaView style={styles.container}>
-        <NewCaseModal
-          visible={showNewCaseForm}
-          onClose={() => setShowNewCaseForm(false)}
-          onCreateCase={handleCreateCase}
-          newCaseTitle={newCaseTitle}
-          setNewCaseTitle={setNewCaseTitle}
-          newCaseType={newCaseType}
-          setNewCaseType={setNewCaseType}
-          newCaseDocket={newCaseDocket}
-          setNewCaseDocket={setNewCaseDocket}
-          newCaseLoading={newCaseLoading}
-          newCaseError={newCaseError}
-          styles={styles}
-          selectedTemplate={selectedTemplate}
-          setSelectedTemplate={setSelectedTemplate}
-        />
+        {/* Calculate unique previously-used case types for autocomplete */}
+        {(() => {
+          const usedTypes = new Set<string>();
+          cases.forEach(c => {
+            if (c.case_type) usedTypes.add(c.case_type);
+          });
+          const suggestedTypes = Array.from(usedTypes).sort();
+
+          return (
+            <NewCaseModal
+              visible={showNewCaseForm}
+              onClose={() => setShowNewCaseForm(false)}
+              onCreateCase={handleCreateCase}
+              newCaseTitle={newCaseTitle}
+              setNewCaseTitle={setNewCaseTitle}
+              newCaseType={newCaseType}
+              setNewCaseType={setNewCaseType}
+              newCaseDocket={newCaseDocket}
+              setNewCaseDocket={setNewCaseDocket}
+              newCaseLoading={newCaseLoading}
+              newCaseError={newCaseError}
+              styles={styles}
+              selectedTemplate={selectedTemplate}
+              setSelectedTemplate={setSelectedTemplate}
+              suggestedCaseTypes={suggestedTypes}
+            />
+          );
+        })()}
 
         {/* Header */}
         <View style={styles.header}>

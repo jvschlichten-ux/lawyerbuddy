@@ -250,6 +250,9 @@ CREATE POLICY "cases_update_lawyer_only" ON cases FOR UPDATE
 CREATE POLICY "cases_insert_lawyer_only" ON cases FOR INSERT
   WITH CHECK (lawyer_id = auth.uid());
 
+CREATE POLICY "cases_delete_lawyer_only" ON cases FOR DELETE
+  USING (lawyer_id = auth.uid());
+
 -- ============================================================================
 -- CASE_INVITES: Lawyers can manage invites for their cases
 -- ============================================================================

@@ -103,6 +103,8 @@ const TRANSLATIONS = {
     recover: 'Recover from Trash',
     recoveryWindow: '30-day recovery window',
     all: 'All',
+    apply: 'Apply',
+    ok: 'OK',
     search: 'Search cases...',
     filter: 'Filter',
     // Case Detail Screen
@@ -236,6 +238,8 @@ const TRANSLATIONS = {
     recover: 'Recuperar de la Papelera',
     recoveryWindow: 'Ventana de recuperación de 30 días',
     all: 'Todos',
+    apply: 'Aplicar',
+    ok: 'Aceptar',
     search: 'Buscar casos...',
     filter: 'Filtro',
     // Case Detail Screen
@@ -1884,6 +1888,11 @@ export default function App() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedCases, setSelectedCases] = useState<Set<string>>(new Set());
 
+  // Case Template State
+  const [showSaveTemplateAlert, setShowSaveTemplateAlert] = useState(false);
+  const [templateBeingSaved, setTemplateBeingSaved] = useState('');
+  const [savedTemplates, setSavedTemplates] = useState<Record<string, any[]>>({});
+
   // Load language preference and saved email on app startup
   useEffect(() => {
     const loadStoredData = async () => {
@@ -1902,6 +1911,14 @@ export default function App() {
           setEmail(savedEmail);
           setRememberEmail(true);
           console.log('✅ Loaded saved email');
+        }
+
+        // Load case templates from AsyncStorage
+        const templatesJson = await AsyncStorage.getItem('caseTemplates');
+        if (templatesJson) {
+          const templates = JSON.parse(templatesJson);
+          setSavedTemplates(templates);
+          console.log('✅ Loaded case templates:', Object.keys(templates).length);
         }
       } catch (err) {
         console.error('Error loading stored data:', err);
@@ -2271,8 +2288,54 @@ export default function App() {
       if (response.ok && data.success) {
         console.log('✅ Case created successfully:', data.case);
 
-        // Template selection removed - users can now save custom templates after case creation
-        // Future feature: Add "Save as Template" button after case creation dialog
+        const newCaseId = data.case.id;
+        const caseType = newCaseType;
+
+        // Check if there's a saved template for this case type
+        const template = savedTemplates[caseType];
+        if (template && template.length > 0) {
+          Alert.alert(
+            'Apply Template?',
+            `Apply "${caseType}" template with ${template.length} checklist items?`,
+            [
+              {
+                text: t('cancel'),
+                onPress: () => {
+                  console.log('Template not applied');
+                },
+              },
+              {
+                text: 'Apply',
+                onPress: async () => {
+                  // Apply template by adding items to the case
+                  try {
+                    const token = await AsyncStorage.getItem('userToken');
+                    if (!token) return;
+
+                    // Add each template item to the case
+                    for (let i = 0; i < template.length; i++) {
+                      const item = template[i];
+                      await fetch(`https://lawyerbuddy-production.up.railway.app/cases/${newCaseId}/checklist`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${token}`,
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          label: item.label || item,
+                          orderIndex: i,
+                        }),
+                      });
+                    }
+                    console.log('✅ Template applied:', caseType);
+                  } catch (err) {
+                    console.error('❌ Error applying template:', err);
+                  }
+                },
+              },
+            ]
+          );
+        }
 
         // Reset form and dismiss modal
         setNewCaseTitle('');
@@ -2570,6 +2633,33 @@ export default function App() {
     ]);
   };
 
+  const saveTemplate = async (caseType: string, checklistItems: any[]) => {
+    try {
+      if (!caseType || !checklistItems.length) {
+        console.warn('⚠️ Cannot save template: missing case type or checklist items');
+        return;
+      }
+
+      const updated = { ...savedTemplates, [caseType]: checklistItems };
+      await AsyncStorage.setItem('caseTemplates', JSON.stringify(updated));
+      setSavedTemplates(updated);
+      console.log('✅ Template saved for case type:', caseType);
+    } catch (err) {
+      console.error('❌ Error saving template:', err);
+    }
+  };
+
+  const applyTemplate = (caseType: string) => {
+    const template = savedTemplates[caseType];
+    if (template && selectedCaseId) {
+      console.log('✅ Applying template for case type:', caseType, 'with', template.length, 'items');
+      // Template items will be added to the case's checklist
+      // This is handled in the CaseDetailScreen
+      return template;
+    }
+    return null;
+  };
+
   const handleLogout = async () => {
     console.log('🔴 Logging out...');
     await AsyncStorage.removeItem('userToken');
@@ -2628,7 +2718,38 @@ export default function App() {
 
       if (response.ok) {
         console.log('✅ Invite sent successfully');
-        alert(`✅ Invite sent! Link expires in 7 days`);
+        Alert.alert(t('inviteSent'), `Link expires in 7 days`, [
+          { text: t('cancel'), onPress: () => {}, style: 'cancel' },
+          {
+            text: t('ok'),
+            onPress: () => {
+              // Show template save alert if case has checklist items
+              const selectedCase = cases.find((c) => c.id === caseId);
+              if (selectedCase && selectedCase.checklist && selectedCase.checklist.length > 0) {
+                Alert.alert(
+                  'Save Template?',
+                  `Save this ${selectedCase.case_type} case setup as a template for future cases?`,
+                  [
+                    {
+                      text: t('cancel'),
+                      onPress: () => {
+                        console.log('Template not saved');
+                      },
+                    },
+                    {
+                      text: 'Save Template',
+                      onPress: async () => {
+                        await saveTemplate(selectedCase.case_type || 'General', selectedCase.checklist);
+                        Alert.alert('Success', 'Template saved! You can apply it when creating new cases.');
+                      },
+                    },
+                  ]
+                );
+              }
+            },
+          },
+        ]);
+
         setInviteEmail('');
         setShowInviteModal(false);
       } else {

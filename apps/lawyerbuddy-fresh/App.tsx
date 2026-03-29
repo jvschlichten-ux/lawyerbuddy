@@ -2276,6 +2276,18 @@ export default function App() {
     }
 
     try {
+      const payload = {
+        caseId,
+        title: label,
+        eventType: 'deadline',
+        occurredAt: date,
+        narrative: label,
+        severity: sev,
+        privacyLevel: 'shared_with_lawyer',
+      };
+
+      console.log('📤 Court Date Request:', JSON.stringify(payload, null, 2));
+
       const response = await fetch(
         'https://lawyerbuddy-production.up.railway.app/events',
         {
@@ -2284,20 +2296,12 @@ export default function App() {
             'Authorization': `Bearer ${userToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            case_id: caseId,
-            title: label,
-            event_type: 'deadline',
-            occurred_at: date,
-            narrative: label,
-            severity: sev,
-            privacy_level: 'shared_with_lawyer',
-          }),
+          body: JSON.stringify(payload),
         }
       );
 
       const data = await response.json();
-      console.log('📡 Events API response:', JSON.stringify(data, null, 2));
+      console.log('📡 Events API Response:', JSON.stringify(data, null, 2));
 
       if (data.success && data.event) {
         setCourtDates([...courtDates, data.event].sort((a, b) =>

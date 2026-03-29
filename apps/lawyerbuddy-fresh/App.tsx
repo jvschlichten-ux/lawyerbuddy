@@ -71,6 +71,8 @@ const TRANSLATIONS = {
     acceptInvite: 'Accept Invite',
     createCase: 'Create Case',
     caseTitlePlaceholder: 'Enter case title',
+    caseTypePlaceholder: 'e.g. Family Law',
+    docketInfo: 'Optional court reference number',
     selectTemplate: 'Select Template (optional)',
     fullName: 'Full Name',
     createPassword: 'Create a password',
@@ -202,6 +204,8 @@ const TRANSLATIONS = {
     acceptInvite: 'Aceptar Invitación',
     createCase: 'Crear Caso',
     caseTitlePlaceholder: 'Ingresa el título del caso',
+    caseTypePlaceholder: 'p.ej. Derecho de Familia',
+    docketInfo: 'Número de referencia del tribunal (opcional)',
     selectTemplate: 'Selecciona Plantilla (opcional)',
     fullName: 'Nombre Completo',
     createPassword: 'Crea una contraseña',
@@ -1472,20 +1476,24 @@ function NewCaseModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t('newCaseTitle')}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.modalCloseButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('newCaseTitle')}</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Text style={styles.modalCloseButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-          <ScrollView
-            style={styles.modalForm}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
+            <ScrollView
+              style={styles.modalForm}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
             {/* Case Title */}
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>{t('newCase')} *</Text>
@@ -1506,7 +1514,7 @@ function NewCaseModal({
               <View>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="e.g., Family Law, Civil, Criminal Defense..."
+                  placeholder={t('caseTypePlaceholder')}
                   placeholderTextColor="#666666"
                   value={newCaseType}
                   onChangeText={(text) => {
@@ -1559,6 +1567,9 @@ function NewCaseModal({
                 editable={!newCaseLoading}
                 autoFocus={false}
               />
+              <Text style={{ color: '#888888', fontSize: 12, marginTop: 6 }}>
+                {t('docketInfo')}
+              </Text>
             </View>
 
             {/* Error Message */}
@@ -1594,9 +1605,10 @@ function NewCaseModal({
             </View>
 
             <View style={{ height: 40 }} />
-          </ScrollView>
+            </ScrollView>
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -2452,10 +2464,10 @@ export default function App() {
       const data = await response.json();
       if (data.success) {
         console.log('✅ Case recovered from trash:', caseId);
-        // Update local state to remove deleted_at flag
+        // Update local state to restore status to 'active'
         setCases(prev =>
           prev.map(c =>
-            c.id === caseId ? { ...c, deleted_at: null } : c
+            c.id === caseId ? { ...c, status: 'active' } : c
           )
         );
       } else {
@@ -2489,11 +2501,11 @@ export default function App() {
 
       if (response.ok || data.success) {
         console.log(permanent ? '✅ Case permanently deleted' : '✅ Case moved to trash', caseId);
-        // Update local state - set deleted_at for soft delete, remove for permanent
+        // Update local state - set status = 'deleted' for soft delete, remove for permanent
         setCases(prev =>
           permanent
             ? prev.filter(c => c.id !== caseId)
-            : prev.map(c => c.id === caseId ? { ...c, deleted_at: new Date().toISOString() } : c)
+            : prev.map(c => c.id === caseId ? { ...c, status: 'deleted' } : c)
         );
       } else {
         console.error('❌ Delete failed:', data);
@@ -2742,7 +2754,7 @@ export default function App() {
 
       // Filter by status and deletion status
       const caseStatus = caseItem.status || 'active';
-      const isDeleted = caseItem.deleted_at !== null && caseItem.deleted_at !== undefined;
+      const isDeleted = caseStatus === 'deleted';
       let matchesStatus = true;
 
       if (statusFilter === 'trash') {
@@ -2889,22 +2901,28 @@ export default function App() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.filterButton,
-                  statusFilter === 'trash' && styles.filterButtonActive,
-                ]}
-                onPress={() => setStatusFilter('trash')}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    statusFilter === 'trash' && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {t('trash')}
-                </Text>
-              </TouchableOpacity>
+              {/* Only show Trash button if there are deleted cases */}
+              {(() => {
+                const hasDeletedCases = cases.some(c => c.status === 'deleted');
+                return hasDeletedCases ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.filterButton,
+                      statusFilter === 'trash' && styles.filterButtonActive,
+                    ]}
+                    onPress={() => setStatusFilter('trash')}
+                  >
+                    <Text
+                      style={[
+                        styles.filterButtonText,
+                        statusFilter === 'trash' && styles.filterButtonTextActive,
+                      ]}
+                    >
+                      {t('trash')}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null;
+              })()}
             </View>
 
             {casesLoading ? (
@@ -2927,7 +2945,7 @@ export default function App() {
                     }}
                     onLongPress={() => {
                       console.log('📋 Long press on case:', caseItem.id);
-                      handleCaseLongPress(caseItem.id, caseItem.status || 'active', caseItem.deleted_at !== null && caseItem.deleted_at !== undefined);
+                      handleCaseLongPress(caseItem.id, caseItem.status || 'active', caseItem.status === 'deleted');
                     }}
                     activeOpacity={0.7}
                     delayLongPress={500}

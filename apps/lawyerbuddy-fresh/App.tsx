@@ -586,10 +586,34 @@ function CaseDetailScreen({
   const [showDayPicker, setShowDayPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
 
+  // Message Settings State
+  const [messagesEnabled, setMessagesEnabled] = useState(true);
+
   // Month names
   const monthNames = AppState.language === 'es'
     ? ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
     : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Load message settings from AsyncStorage
+  useEffect(() => {
+    if (!caseData?.id) return;
+
+    const loadMessageSettings = async () => {
+      try {
+        const key = `case_${caseData.id}_messagesEnabled`;
+        const stored = await AsyncStorage.getItem(key);
+        if (stored !== null) {
+          setMessagesEnabled(JSON.parse(stored));
+        } else {
+          setMessagesEnabled(true); // Default to enabled
+        }
+      } catch (err) {
+        console.error('Error loading message settings:', err);
+      }
+    };
+
+    loadMessageSettings();
+  }, [caseData?.id]);
 
   // Load checklist from database
   useEffect(() => {
@@ -948,7 +972,32 @@ function CaseDetailScreen({
         {/* Messages Section */}
         {caseDetailTab === 'messages' && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailSectionTitle}>{t('messages')}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 }}>
+            <Text style={styles.detailSectionTitle}>{t('messages')}</Text>
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 6,
+                backgroundColor: messagesEnabled ? '#22c55e' : '#555555',
+              }}
+              onPress={async () => {
+                const newState = !messagesEnabled;
+                setMessagesEnabled(newState);
+                try {
+                  const key = `case_${caseData.id}_messagesEnabled`;
+                  await AsyncStorage.setItem(key, JSON.stringify(newState));
+                  console.log('✅ Message settings saved:', newState);
+                } catch (err) {
+                  console.error('Error saving message settings:', err);
+                }
+              }}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 12 }}>
+                {messagesEnabled ? '✓ Enabled' : 'Disabled'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           {messagesLoading ? (
             <View style={{ paddingVertical: 20, alignItems: 'center' }}>
               <ActivityIndicator color="#0066cc" size="large" />
@@ -1002,23 +1051,29 @@ function CaseDetailScreen({
             })
           )}
 
-          <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', gap: 8 }}>
-            <TextInput
-              style={{ flex: 1, borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a' }}
-              placeholder={t('typeMessage')}
-              placeholderTextColor="#666666"
-              value={newMessage}
-              onChangeText={setNewMessage}
-              multiline
-            />
-            <TouchableOpacity
-              style={{ backgroundColor: '#0066cc', paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center' }}
-              onPress={() => sendMessage(caseData?.id)}
-              disabled={!!messagesSendingId}
-            >
-              <Text style={{ color: '#ffffff', fontWeight: '600' }}>{t('sendMessage')}</Text>
-            </TouchableOpacity>
-          </View>
+          {messagesEnabled ? (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', gap: 8 }}>
+              <TextInput
+                style={{ flex: 1, borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a' }}
+                placeholder={t('typeMessage')}
+                placeholderTextColor="#666666"
+                value={newMessage}
+                onChangeText={setNewMessage}
+                multiline
+              />
+              <TouchableOpacity
+                style={{ backgroundColor: '#0066cc', paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center' }}
+                onPress={() => sendMessage(caseData?.id)}
+                disabled={!!messagesSendingId}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '600' }}>{t('sendMessage')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#1a1a1a', borderRadius: 8, marginHorizontal: 16, marginBottom: 8 }}>
+              <Text style={{ color: '#888888', textAlign: 'center' }}>Messages are disabled for this case</Text>
+            </View>
+          )}
         </View>
         )}
 

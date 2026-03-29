@@ -93,11 +93,10 @@ router.post('/', verifyJWT, async (req: Request, res: Response) => {
 router.get('/', verifyJWT, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { status, limit = '50', offset = '0', trash = 'false' } = req.query;
+    const { status, limit = '50', offset = '0' } = req.query;
 
     const limitNum = parseInt(limit as string);
     const offsetNum = parseInt(offset as string);
-    const showTrash = trash === 'true';
 
     // Query cases where user is lawyer_id or client_id
     // Join with profiles to get lawyer and client names

@@ -114,15 +114,16 @@ router.get('/', verifyJWT, async (req: Request, res: Response) => {
     query = query.or(`lawyer_id.eq.${userId},client_id.eq.${userId}`);
 
     // Filter by deletion status
+    // NOTE: Using status = 'deleted' instead of deleted_at column (migration pending)
     if (showTrash) {
       // Show only soft-deleted cases
-      query = query.not('deleted_at', 'is', null);
+      query = query.eq('status', 'deleted');
     } else {
       // Show only non-deleted cases (default)
-      query = query.is('deleted_at', null);
+      query = query.neq('status', 'deleted');
     }
 
-    if (status) {
+    if (status && status !== 'deleted') {
       query = query.eq('status', status);
     }
 
@@ -307,12 +308,12 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
-    const { permanent } = req.query; // permanent=true for hard delete (after 30 days)
+    const { permanent } = req.query; // permanent=true for hard delete
 
     // Verify user is lawyer for this case
     const { data: caseData, error: caseError } = await getSupabase()
       .from('cases')
-      .select('lawyer_id, deleted_at')
+      .select('lawyer_id, status')
       .eq('id', id)
       .single();
 
@@ -329,13 +330,10 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
     }
 
     if (permanent === 'true') {
-      // Hard delete (only after 30 days)
-      const deletedAt = caseData.deleted_at;
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-      if (!deletedAt || new Date(deletedAt) > thirtyDaysAgo) {
+      // Permanent delete - only if already in trash
+      if (caseData.status !== 'deleted') {
         return res.status(400).json({
-          error: 'Cases can only be permanently deleted 30 days after soft delete',
+          error: 'Only cases in trash can be permanently deleted',
         });
       }
 
@@ -355,10 +353,10 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
         message: `Case ${id} permanently deleted`,
       });
     } else {
-      // Soft delete (mark with deleted_at timestamp)
+      // Soft delete (set status to 'deleted')
       const { error: updateError } = await getSupabase()
         .from('cases')
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ status: 'deleted' })
         .eq('id', id);
 
       if (updateError) {
@@ -369,7 +367,7 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
 
       res.json({
         success: true,
-        message: `Case ${id} moved to trash (recoverable for 30 days)`,
+        message: `Case ${id} moved to trash`,
       });
     }
   } catch (error: any) {
@@ -395,7 +393,7 @@ router.patch('/:id/recover', verifyJWT, async (req: Request, res: Response) => {
     // Verify user is lawyer for this case
     const { data: caseData, error: caseError } = await getSupabase()
       .from('cases')
-      .select('lawyer_id, deleted_at')
+      .select('lawyer_id, status')
       .eq('id', id)
       .single();
 
@@ -411,26 +409,16 @@ router.patch('/:id/recover', verifyJWT, async (req: Request, res: Response) => {
       });
     }
 
-    if (!caseData.deleted_at) {
+    if (caseData.status !== 'deleted') {
       return res.status(400).json({
         error: 'Case is not in trash',
       });
     }
 
-    // Check if within 30-day recovery window
-    const deletedAt = new Date(caseData.deleted_at);
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    if (deletedAt < thirtyDaysAgo) {
-      return res.status(400).json({
-        error: 'Recovery window expired (30 days)',
-      });
-    }
-
-    // Recover case by clearing deleted_at
+    // Recover case by setting status back to 'active'
     const { data: recovered, error: updateError } = await getSupabase()
       .from('cases')
-      .update({ deleted_at: null })
+      .update({ status: 'active' })
       .eq('id', id)
       .select()
       .single();
@@ -439,7 +427,7 @@ router.patch('/:id/recover', verifyJWT, async (req: Request, res: Response) => {
       throw new Error(`Case recovery failed: ${updateError.message}`);
     }
 
-    await auditLog.logCaseUpdate(userId, id, { deleted_at: null });
+    await auditLog.logCaseUpdate(userId, id, { status: 'active' });
 
     res.json({
       success: true,

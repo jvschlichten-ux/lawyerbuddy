@@ -86,6 +86,7 @@ const TRANSLATIONS = {
     compliance: 'Compliance/Forms',
     criminalDefense: 'Criminal Defense',
     other: 'Other',
+    general: 'General Law',
     // Case Management
     archive: 'Archive',
     delete: 'Delete',
@@ -98,6 +99,38 @@ const TRANSLATIONS = {
     all: 'All',
     search: 'Search cases...',
     filter: 'Filter',
+    // Case Detail Screen
+    caseInfo: 'Case Information',
+    inProgress: 'In Progress',
+    closed: 'Closed',
+    docket: 'Docket Number',
+    yourLawyer: 'Your Lawyer',
+    contactLawyer: 'Contact Lawyer',
+    emailLawyer: 'Email Lawyer',
+    none: 'None',
+    untitledCase: 'Untitled Case',
+    back: 'Back',
+    contactYourLawyer: 'Contact Your Lawyer',
+    // Checklist Templates
+    signRetainer: 'Sign retainer agreement',
+    gatherFinancial: 'Gather financial documents',
+    collectChildDocs: 'Collect child custody documentation',
+    fileInitialPetition: 'File initial petition',
+    serveSpouse: 'Serve spouse with papers',
+    attendMediation: 'Attend mediation session',
+    prepareSettlement: 'Prepare settlement agreement',
+    completeAudit: 'Complete compliance audit',
+    fileRequiredForms: 'File required forms with government',
+    updatePrivacy: 'Update privacy policy',
+    documentCompliance: 'Document compliance procedures',
+    trainStaff: 'Train staff on requirements',
+    scheduleFollowUp: 'Schedule follow-up audit',
+    reviewPolice: 'Review police report',
+    investigateArrest: 'Investigate arrest circumstances',
+    fileDiscovery: 'File discovery motions',
+    prepareDefense: 'Prepare defense strategy',
+    arrangeMeeting: 'Arrange client meeting',
+    prepareBail: 'Prepare bail/release arguments',
   },
   es: {
     // Login & Auth
@@ -180,6 +213,7 @@ const TRANSLATIONS = {
     compliance: 'Cumplimiento/Formularios',
     criminalDefense: 'Defensa Criminal',
     other: 'Otro',
+    general: 'Derecho General',
     // Case Management
     archive: 'Archivar',
     delete: 'Eliminar',
@@ -192,6 +226,38 @@ const TRANSLATIONS = {
     all: 'Todos',
     search: 'Buscar casos...',
     filter: 'Filtro',
+    // Case Detail Screen
+    caseInfo: 'Información del Caso',
+    inProgress: 'En Progreso',
+    closed: 'Cerrado',
+    docket: 'Número de Expediente',
+    yourLawyer: 'Tu Abogado',
+    contactLawyer: 'Contactar Abogado',
+    emailLawyer: 'Correo del Abogado',
+    none: 'Ninguno',
+    untitledCase: 'Caso sin Título',
+    back: 'Atrás',
+    contactYourLawyer: 'Contacta a tu Abogado',
+    // Checklist Templates
+    signRetainer: 'Firmar acuerdo de retención',
+    gatherFinancial: 'Reunir documentos financieros',
+    collectChildDocs: 'Recopilar documentación de custodia infantil',
+    fileInitialPetition: 'Presentar petición inicial',
+    serveSpouse: 'Notificar al cónyuge con documentos',
+    attendMediation: 'Asistir a sesión de mediación',
+    prepareSettlement: 'Preparar acuerdo de liquidación',
+    completeAudit: 'Completar auditoría de cumplimiento',
+    fileRequiredForms: 'Presentar formularios requeridos al gobierno',
+    updatePrivacy: 'Actualizar política de privacidad',
+    documentCompliance: 'Documentar procedimientos de cumplimiento',
+    trainStaff: 'Capacitar al personal sobre requisitos',
+    scheduleFollowUp: 'Programar auditoría de seguimiento',
+    reviewPolice: 'Revisar informe policial',
+    investigateArrest: 'Investigar circunstancias del arresto',
+    fileDiscovery: 'Presentar mociones de descubrimiento',
+    prepareDefense: 'Preparar estrategia de defensa',
+    arrangeMeeting: 'Organizar reunión con cliente',
+    prepareBail: 'Preparar argumentos de fianza/liberación',
   },
 };
 
@@ -222,34 +288,68 @@ const getCaseTypes = () => [
   { value: 'Other', label: t('other') },
 ];
 
-const CHECKLIST_TEMPLATES: Record<string, string[]> = {
-  'Family Law': [
-    'Sign retainer agreement',
-    'Gather financial documents',
-    'Collect child custody documentation',
-    'File initial petition',
-    'Serve spouse with papers',
-    'Attend mediation session',
-    'Prepare settlement agreement',
-  ],
-  'Compliance/Forms': [
-    'Complete compliance audit',
-    'File required forms with government',
-    'Update privacy policy',
-    'Document compliance procedures',
-    'Train staff on requirements',
-    'Schedule follow-up audit',
-  ],
-  'Criminal Defense': [
-    'Review police report',
-    'Investigate arrest circumstances',
-    'File discovery motions',
-    'Prepare defense strategy',
-    'Arrange client meeting',
-    'Prepare bail/release arguments',
-    'File pre-trial motions',
-    'Prepare for trial',
-  ],
+// Get checklist templates based on current language
+const getChecklistTemplates = (): Record<string, string[]> => {
+  const lang = AppState.language;
+
+  if (lang === 'es') {
+    return {
+      'Family Law': [
+        t('signRetainer'),
+        t('gatherFinancial'),
+        t('collectChildDocs'),
+        t('fileInitialPetition'),
+        t('serveSpouse'),
+        t('attendMediation'),
+        t('prepareSettlement'),
+      ],
+      'Compliance/Forms': [
+        t('completeAudit'),
+        t('fileRequiredForms'),
+        t('updatePrivacy'),
+        t('documentCompliance'),
+        t('trainStaff'),
+        t('scheduleFollowUp'),
+      ],
+      'Criminal Defense': [
+        t('reviewPolice'),
+        t('investigateArrest'),
+        t('fileDiscovery'),
+        t('prepareDefense'),
+        t('arrangeMeeting'),
+        t('prepareBail'),
+      ],
+    };
+  }
+
+  // English (default)
+  return {
+    'Family Law': [
+      'Sign retainer agreement',
+      'Gather financial documents',
+      'Collect child custody documentation',
+      'File initial petition',
+      'Serve spouse with papers',
+      'Attend mediation session',
+      'Prepare settlement agreement',
+    ],
+    'Compliance/Forms': [
+      'Complete compliance audit',
+      'File required forms with government',
+      'Update privacy policy',
+      'Document compliance procedures',
+      'Train staff on requirements',
+      'Schedule follow-up audit',
+    ],
+    'Criminal Defense': [
+      'Review police report',
+      'Investigate arrest circumstances',
+      'File discovery motions',
+      'Prepare defense strategy',
+      'Arrange client meeting',
+      'Prepare bail/release arguments',
+    ],
+  };
 };
 
 // Invite Client Modal Component
@@ -580,39 +680,39 @@ function CaseDetailScreen({
         {/* Header */}
         <View style={styles.detailHeader}>
           <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <Text style={styles.backButtonText}>← {t('back')}</Text>
           </TouchableOpacity>
-          <Text style={styles.detailTitle}>{caseData?.title || 'Untitled Case'}</Text>
+          <Text style={styles.detailTitle}>{caseData?.title || t('untitledCase')}</Text>
           <View style={{ width: 60 }} />
         </View>
 
         <ScrollView style={styles.detailContent} showsVerticalScrollIndicator={false}>
         {/* Case Information */}
         <View style={styles.detailSection}>
-          <Text style={styles.detailSectionTitle}>Case Information</Text>
+          <Text style={styles.detailSectionTitle}>{t('caseInfo')}</Text>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Case Type:</Text>
-            <Text style={styles.detailValue}>{caseData?.case_type || 'General Law'}</Text>
+            <Text style={styles.detailLabel}>{t('caseType')}:</Text>
+            <Text style={styles.detailValue}>{caseData?.case_type || t('general')}</Text>
           </View>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Status:</Text>
-            <Text style={[styles.detailValue, { color: '#22c55e' }]}>
-              {(caseData?.status || 'active').toUpperCase()}
+            <Text style={styles.detailLabel}>{t('status')}:</Text>
+            <Text style={[styles.detailValue, { color: getStatusColor(caseData?.status || 'active') }]}>
+              {getStatusLabel(caseData?.status || 'active')}
             </Text>
           </View>
 
           {caseData?.docket_number && (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Docket Number:</Text>
+              <Text style={styles.detailLabel}>{t('docket')}:</Text>
               <Text style={styles.detailValue}>{caseData.docket_number}</Text>
             </View>
           )}
 
           {caseData?.client_name && (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Client:</Text>
+              <Text style={styles.detailLabel}>{t('client')}:</Text>
               <Text style={styles.detailValue}>{caseData.client_name}</Text>
             </View>
           )}
@@ -1071,28 +1171,28 @@ function ClientPortalScreen({
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Case Info */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Case Information</Text>
+            <Text style={styles.sectionTitle}>{t('caseInfo')}</Text>
             <View style={{ paddingLeft: 16 }}>
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: '#888888', fontSize: 12 }}>Type</Text>
+                <Text style={{ color: '#888888', fontSize: 12 }}>{t('caseType')}</Text>
                 <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
                   {caseData.case_type}
                 </Text>
               </View>
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: '#888888', fontSize: 12 }}>Status</Text>
-                <Text style={{ color: '#22c55e', fontSize: 16, fontWeight: '600' }}>
-                  {(caseData.status || 'active').toUpperCase()}
+                <Text style={{ color: '#888888', fontSize: 12 }}>{t('status')}</Text>
+                <Text style={{ color: getStatusColor(caseData.status || 'active'), fontSize: 16, fontWeight: '600' }}>
+                  {getStatusLabel(caseData.status || 'active')}
                 </Text>
               </View>
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: '#888888', fontSize: 12 }}>Your Lawyer</Text>
+                <Text style={{ color: '#888888', fontSize: 12 }}>{t('yourLawyer')}</Text>
                 <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
-                  {caseData.lawyer?.full_name || 'Not assigned'}
+                  {caseData.lawyer?.full_name || t('none')}
                 </Text>
               </View>
               <View>
-                <Text style={{ color: '#888888', fontSize: 12 }}>Created</Text>
+                <Text style={{ color: '#888888', fontSize: 12 }}>{t('created')}</Text>
                 <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
                   {new Date(caseData.created_at).toLocaleDateString('en-US', {
                     month: 'short',
@@ -1160,7 +1260,7 @@ function ClientPortalScreen({
 
           {/* Contact Lawyer Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Contact Your Lawyer</Text>
+            <Text style={styles.sectionTitle}>{t('contactYourLawyer')}</Text>
             <View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
               <TouchableOpacity
                 style={{
@@ -1174,12 +1274,12 @@ function ClientPortalScreen({
                 onPress={() => {
                   const email = caseData.lawyer?.email;
                   if (email) {
-                    alert(`Email your lawyer at: ${email}`);
+                    alert(`${t('emailLawyer')}: ${email}`);
                   }
                 }}
               >
                 <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600' }}>
-                  📧 Email Lawyer
+                  📧 {t('emailLawyer')}
                 </Text>
               </TouchableOpacity>
               {caseData.lawyer?.email && (
@@ -1312,7 +1412,7 @@ function NewCaseModal({
                     {t('cancel')}
                   </Text>
                 </TouchableOpacity>
-                {Object.keys(CHECKLIST_TEMPLATES).map((templateName) => (
+                {Object.keys(getChecklistTemplates()).map((templateName) => (
                   <TouchableOpacity
                     key={templateName}
                     style={[
@@ -1980,9 +2080,9 @@ export default function App() {
         console.log('✅ Case created successfully:', data.case);
 
         // Apply checklist template if selected
-        if (selectedTemplate && CHECKLIST_TEMPLATES[selectedTemplate]) {
+        if (selectedTemplate && getChecklistTemplates()[selectedTemplate]) {
           const caseId = data.case.id;
-          const templateItems = CHECKLIST_TEMPLATES[selectedTemplate];
+          const templateItems = getChecklistTemplates()[selectedTemplate];
 
           console.log(`📋 Applying template "${selectedTemplate}" with ${templateItems.length} items`);
 
@@ -2338,8 +2438,29 @@ export default function App() {
         return '#3b82f6';
       case 'closed':
         return '#888888';
+      case 'active':
+        return '#22c55e';
+      case 'archived':
+        return '#888888';
       default:
         return '#0066cc';
+    }
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const normalizedStatus = status?.toLowerCase() || 'active';
+    switch (normalizedStatus) {
+      case 'active':
+        return t('active');
+      case 'in_progress':
+      case 'inprogress':
+        return t('inProgress');
+      case 'closed':
+        return t('closed');
+      case 'archived':
+        return t('archived');
+      default:
+        return status;
     }
   };
 
@@ -2600,7 +2721,7 @@ export default function App() {
                           <Text style={{ fontSize: 20, marginRight: 10 }}>
                             {getCaseTypeEmoji(caseItem.case_type || 'Other')}
                           </Text>
-                          <Text style={styles.caseTitle}>{caseItem.title || 'Untitled Case'}</Text>
+                          <Text style={styles.caseTitle}>{caseItem.title || t('untitledCase')}</Text>
                         </View>
                       </View>
                       <View
@@ -2610,12 +2731,12 @@ export default function App() {
                         ]}
                       >
                         <Text style={[styles.statusText, { color: getStatusColor(caseItem.status) }]}>
-                          {(caseItem.status || 'active').toUpperCase()}
+                          {getStatusLabel(caseItem.status || 'active')}
                         </Text>
                       </View>
                     </View>
                     <Text style={styles.caseType}>
-                      {caseItem.case_type || 'General Law'}
+                      {caseItem.case_type || t('general')}
                       {caseItem.docket_number ? ` • Docket: ${caseItem.docket_number}` : ''}
                     </Text>
                     <Text style={styles.caseDetails}>

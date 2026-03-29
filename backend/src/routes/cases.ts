@@ -93,10 +93,11 @@ router.post('/', verifyJWT, async (req: Request, res: Response) => {
 router.get('/', verifyJWT, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { status, limit = '50', offset = '0' } = req.query;
+    const { status, limit = '50', offset = '0', trash = 'false' } = req.query;
 
     const limitNum = parseInt(limit as string);
     const offsetNum = parseInt(offset as string);
+    const showTrash = trash === 'true';
 
     // Query cases where user is lawyer_id or client_id
     // Join with profiles to get lawyer and client names
@@ -111,6 +112,15 @@ router.get('/', verifyJWT, async (req: Request, res: Response) => {
 
     // Filter by user role (lawyer sees own cases, client sees assigned cases)
     query = query.or(`lawyer_id.eq.${userId},client_id.eq.${userId}`);
+
+    // Filter by deletion status
+    if (showTrash) {
+      // Show only soft-deleted cases
+      query = query.not('deleted_at', 'is', null);
+    } else {
+      // Show only non-deleted cases (default)
+      query = query.is('deleted_at', null);
+    }
 
     if (status) {
       query = query.eq('status', status);
@@ -297,11 +307,12 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
+    const { permanent } = req.query; // permanent=true for hard delete (after 30 days)
 
     // Verify user is lawyer for this case
     const { data: caseData, error: caseError } = await getSupabase()
       .from('cases')
-      .select('lawyer_id')
+      .select('lawyer_id, deleted_at')
       .eq('id', id)
       .single();
 
@@ -317,26 +328,127 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
       });
     }
 
-    // Delete case (cascade delete via foreign keys)
-    const { error: deleteError } = await getSupabase()
-      .from('cases')
-      .delete()
-      .eq('id', id);
+    if (permanent === 'true') {
+      // Hard delete (only after 30 days)
+      const deletedAt = caseData.deleted_at;
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    if (deleteError) {
-      throw new Error(`Case deletion failed: ${deleteError.message}`);
+      if (!deletedAt || new Date(deletedAt) > thirtyDaysAgo) {
+        return res.status(400).json({
+          error: 'Cases can only be permanently deleted 30 days after soft delete',
+        });
+      }
+
+      const { error: deleteError } = await getSupabase()
+        .from('cases')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        throw new Error(`Case deletion failed: ${deleteError.message}`);
+      }
+
+      await auditLog.logCaseDeletion(userId, id);
+
+      res.json({
+        success: true,
+        message: `Case ${id} permanently deleted`,
+      });
+    } else {
+      // Soft delete (mark with deleted_at timestamp)
+      const { error: updateError } = await getSupabase()
+        .from('cases')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (updateError) {
+        throw new Error(`Case soft delete failed: ${updateError.message}`);
+      }
+
+      await auditLog.logCaseDeletion(userId, id);
+
+      res.json({
+        success: true,
+        message: `Case ${id} moved to trash (recoverable for 30 days)`,
+      });
     }
-
-    // Log deletion for audit trail
-    await auditLog.logCaseDeletion(userId, id);
-
-    res.json({
-      success: true,
-      message: `Case ${id} deleted successfully`,
-    });
   } catch (error: any) {
     res.status(400).json({
       error: error.message || 'Case deletion failed',
+    });
+  }
+});
+
+/**
+ * PATCH /cases/:id/recover
+ * Recover a soft-deleted case from trash (within 30 days)
+ * Lawyer only
+ *
+ * Response:
+ * - case: Recovered case object
+ */
+router.patch('/:id/recover', verifyJWT, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+
+    // Verify user is lawyer for this case
+    const { data: caseData, error: caseError } = await getSupabase()
+      .from('cases')
+      .select('lawyer_id, deleted_at')
+      .eq('id', id)
+      .single();
+
+    if (caseError || !caseData) {
+      return res.status(404).json({
+        error: 'Case not found',
+      });
+    }
+
+    if (caseData.lawyer_id !== userId) {
+      return res.status(403).json({
+        error: 'Only the case lawyer can recover cases',
+      });
+    }
+
+    if (!caseData.deleted_at) {
+      return res.status(400).json({
+        error: 'Case is not in trash',
+      });
+    }
+
+    // Check if within 30-day recovery window
+    const deletedAt = new Date(caseData.deleted_at);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    if (deletedAt < thirtyDaysAgo) {
+      return res.status(400).json({
+        error: 'Recovery window expired (30 days)',
+      });
+    }
+
+    // Recover case by clearing deleted_at
+    const { data: recovered, error: updateError } = await getSupabase()
+      .from('cases')
+      .update({ deleted_at: null })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw new Error(`Case recovery failed: ${updateError.message}`);
+    }
+
+    await auditLog.logCaseUpdate(userId, id, { deleted_at: null });
+
+    res.json({
+      success: true,
+      message: `Case ${id} recovered from trash`,
+      case: recovered,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      error: error.message || 'Case recovery failed',
     });
   }
 });

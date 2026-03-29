@@ -96,6 +96,10 @@ const TRANSLATIONS = {
     archived: 'Archived',
     showArchived: 'Show Archived',
     hideArchived: 'Hide Archived',
+    trash: 'Trash',
+    recovery: 'Recovery',
+    recover: 'Recover from Trash',
+    recoveryWindow: '30-day recovery window',
     all: 'All',
     search: 'Search cases...',
     filter: 'Filter',
@@ -223,6 +227,10 @@ const TRANSLATIONS = {
     archived: 'Archivado',
     showArchived: 'Mostrar Archivados',
     hideArchived: 'Ocultar Archivados',
+    trash: 'Papelera',
+    recovery: 'Recuperación',
+    recover: 'Recuperar de la Papelera',
+    recoveryWindow: 'Ventana de recuperación de 30 días',
     all: 'Todos',
     search: 'Buscar casos...',
     filter: 'Filtro',
@@ -2334,15 +2342,15 @@ export default function App() {
     }
   };
 
-  const deleteCase = async (caseId: string) => {
+  const recoverCase = async (caseId: string) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
 
       const response = await fetch(
-        `https://lawyerbuddy-production.up.railway.app/cases/${caseId}`,
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseId}/recover`,
         {
-          method: 'DELETE',
+          method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -2351,12 +2359,51 @@ export default function App() {
       );
 
       const data = await response.json();
+      if (data.success) {
+        console.log('✅ Case recovered from trash:', caseId);
+        // Update local state to remove deleted_at flag
+        setCases(prev =>
+          prev.map(c =>
+            c.id === caseId ? { ...c, deleted_at: null } : c
+          )
+        );
+      } else {
+        Alert.alert('Error', data.error || 'Failed to recover case');
+      }
+    } catch (err: any) {
+      console.error('❌ Error recovering case:', err);
+      Alert.alert('Error', 'Failed to recover case: ' + err.message);
+    }
+  };
+
+  const deleteCase = async (caseId: string, permanent: boolean = false) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const url = permanent
+        ? `https://lawyerbuddy-production.up.railway.app/cases/${caseId}?permanent=true`
+        : `https://lawyerbuddy-production.up.railway.app/cases/${caseId}`;
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
       console.log('Delete response:', data, 'Status:', response.status);
 
       if (response.ok || data.success) {
-        console.log('✅ Case deleted:', caseId);
-        // Update local state for immediate UI feedback
-        setCases(prev => prev.filter(c => c.id !== caseId));
+        console.log(permanent ? '✅ Case permanently deleted' : '✅ Case moved to trash', caseId);
+        // Update local state - set deleted_at for soft delete, remove for permanent
+        setCases(prev =>
+          permanent
+            ? prev.filter(c => c.id !== caseId)
+            : prev.map(c => c.id === caseId ? { ...c, deleted_at: new Date().toISOString() } : c)
+        );
       } else {
         console.error('❌ Delete failed:', data);
       }
@@ -2365,37 +2412,62 @@ export default function App() {
     }
   };
 
-  const handleCaseLongPress = (caseId: string, caseStatus: string) => {
+  const handleCaseLongPress = (caseId: string, caseStatus: string, isDeleted: boolean = false) => {
     const buttons: any[] = [];
 
-    if (caseStatus === 'archived') {
+    if (isDeleted) {
+      // Trash case options
       buttons.push({
-        text: t('restore'),
-        onPress: () => restoreCase(caseId),
+        text: t('recover'),
+        onPress: () => recoverCase(caseId),
         style: 'default',
+      });
+
+      buttons.push({
+        text: t('deletePermanently'),
+        onPress: () => {
+          Alert.alert(t('deletePermanently'), t('deleteConfirm'), [
+            { text: t('cancel'), onPress: () => {}, style: 'cancel' },
+            {
+              text: t('delete'),
+              onPress: () => deleteCase(caseId, true),
+              style: 'destructive',
+            },
+          ]);
+        },
+        style: 'destructive',
       });
     } else {
+      // Normal case options
+      if (caseStatus === 'archived') {
+        buttons.push({
+          text: t('restore'),
+          onPress: () => restoreCase(caseId),
+          style: 'default',
+        });
+      } else {
+        buttons.push({
+          text: t('archive'),
+          onPress: () => archiveCase(caseId),
+          style: 'default',
+        });
+      }
+
       buttons.push({
-        text: t('archive'),
-        onPress: () => archiveCase(caseId),
-        style: 'default',
+        text: t('delete'),
+        onPress: () => {
+          Alert.alert(t('delete'), t('recoveryWindow'), [
+            { text: t('cancel'), onPress: () => {}, style: 'cancel' },
+            {
+              text: t('delete'),
+              onPress: () => deleteCase(caseId, false),
+              style: 'destructive',
+            },
+          ]);
+        },
+        style: 'destructive',
       });
     }
-
-    buttons.push({
-      text: t('delete'),
-      onPress: () => {
-        Alert.alert(t('deletePermanently'), t('deleteConfirm'), [
-          { text: t('cancel'), onPress: () => {}, style: 'cancel' },
-          {
-            text: t('delete'),
-            onPress: () => deleteCase(caseId),
-            style: 'destructive',
-          },
-        ]);
-      },
-      style: 'destructive',
-    });
 
     buttons.push({
       text: t('cancel'),
@@ -2403,8 +2475,8 @@ export default function App() {
     });
 
     Alert.alert(
-      t('archive'), // Title
-      `${t('caseType')}: Choose an action`,
+      isDeleted ? t('trash') : t('archive'), // Title
+      isDeleted ? t('recovery') : `${t('caseType')}: Choose an action`,
       buttons
     );
   };
@@ -2575,19 +2647,23 @@ export default function App() {
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
 
-      // Filter by status
+      // Filter by status and deletion status
       const caseStatus = caseItem.status || 'active';
+      const isDeleted = caseItem.deleted_at !== null && caseItem.deleted_at !== undefined;
       let matchesStatus = true;
 
-      if (statusFilter === 'all') {
-        // 'All' filter should exclude archived unless showArchived is true
-        matchesStatus = showArchived ? true : caseStatus !== 'archived';
+      if (statusFilter === 'trash') {
+        // Trash filter shows only soft-deleted cases
+        matchesStatus = isDeleted;
+      } else if (statusFilter === 'all') {
+        // 'All' filter shows non-deleted cases
+        matchesStatus = !isDeleted;
       } else if (statusFilter === 'active') {
-        // Active filter shows only active cases
-        matchesStatus = caseStatus === 'active';
+        // Active filter shows only active, non-deleted cases
+        matchesStatus = !isDeleted && caseStatus === 'active';
       } else if (statusFilter === 'archived') {
-        // Archived filter shows only archived cases
-        matchesStatus = caseStatus === 'archived';
+        // Archived filter shows only archived, non-deleted cases
+        matchesStatus = !isDeleted && caseStatus === 'archived';
       }
 
       return matchesSearch && matchesStatus;
@@ -2707,6 +2783,23 @@ export default function App() {
                   {t('archived')}
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  statusFilter === 'trash' && styles.filterButtonActive,
+                ]}
+                onPress={() => setStatusFilter('trash')}
+              >
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    statusFilter === 'trash' && styles.filterButtonTextActive,
+                  ]}
+                >
+                  {t('trash')}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {casesLoading ? (
@@ -2729,7 +2822,7 @@ export default function App() {
                     }}
                     onLongPress={() => {
                       console.log('📋 Long press on case:', caseItem.id);
-                      handleCaseLongPress(caseItem.id, caseItem.status || 'active');
+                      handleCaseLongPress(caseItem.id, caseItem.status || 'active', caseItem.deleted_at !== null && caseItem.deleted_at !== undefined);
                     }}
                     activeOpacity={0.7}
                     delayLongPress={500}

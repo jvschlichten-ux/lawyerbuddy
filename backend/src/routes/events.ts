@@ -417,9 +417,6 @@ router.delete('/:eventId', verifyJWT, async (req: Request, res: Response) => {
       throw new Error(`Event deletion failed: ${deleteError.message}`);
     }
 
-    // Log deletion for audit trail
-    await auditLog.logEventDelete(userId, eventId, event.case_id);
-
     res.json({
       success: true,
       message: 'Event deleted successfully',

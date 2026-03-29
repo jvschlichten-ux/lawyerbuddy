@@ -535,6 +535,7 @@ function CaseDetailScreen({
   setCaseDetailTab,
   deleteMessage,
   deleteCourtDate,
+  onChecklistChanged,
 }: {
   caseData: any;
   onBack: () => void;
@@ -570,6 +571,7 @@ function CaseDetailScreen({
   setCaseDetailTab: (tab: 'checklist' | 'messages' | 'documents' | 'dates') => void;
   deleteMessage: (id: string) => void;
   deleteCourtDate: (id: string) => void;
+  onChecklistChanged?: () => Promise<void>;
 }) {
   const [checklistItems, setChecklistItems] = useState<any[]>([]);
   const [showAddItemInput, setShowAddItemInput] = useState(false);
@@ -722,6 +724,11 @@ function CaseDetailScreen({
           prevItems.map(i => i.id === item.id ? data.item : i)
         );
         console.log('✅ Checklist item confirmed by server:', data.item);
+
+        // Refresh checklist progress on dashboard
+        if (onChecklistChanged) {
+          await onChecklistChanged();
+        }
       } else {
         // Revert on API failure using functional setState
         setChecklistItems(prevItems =>
@@ -2666,10 +2673,26 @@ export default function App() {
   };
 
   const archiveSelectedCases = async () => {
-    for (const caseId of selectedCases) {
-      await archiveCase(caseId);
-    }
+    // Archive all selected cases in parallel using Promise.all()
+    const archivePromises = Array.from(selectedCases).map(caseId => archiveCase(caseId));
+    await Promise.all(archivePromises);
     exitSelectionMode();
+  };
+
+  const restoreSelectedCases = async () => {
+    // Restore all selected cases in parallel using Promise.all()
+    const restorePromises = Array.from(selectedCases).map(caseId => restoreCase(caseId));
+    await Promise.all(restorePromises);
+    exitSelectionMode();
+  };
+
+  const getSelectedCasesStatuses = () => {
+    const statuses = new Set<string>();
+    for (const caseId of selectedCases) {
+      const c = cases.find(ca => ca.id === caseId);
+      if (c) statuses.add(c.status || 'active');
+    }
+    return statuses;
   };
 
   const deleteSelectedCases = async () => {
@@ -2678,9 +2701,9 @@ export default function App() {
       {
         text: t('delete'),
         onPress: async () => {
-          for (const caseId of selectedCases) {
-            await deleteCase(caseId, false);
-          }
+          // Delete all selected cases in parallel using Promise.all()
+          const deletePromises = Array.from(selectedCases).map(caseId => deleteCase(caseId, false));
+          await Promise.all(deletePromises);
           exitSelectionMode();
         },
         style: 'destructive',
@@ -2884,6 +2907,12 @@ export default function App() {
           setCaseDetailTab={setCaseDetailTab}
           deleteMessage={deleteMessage}
           deleteCourtDate={deleteCourtDate}
+          onChecklistChanged={async () => {
+            // Refresh checklist progress on the dashboard after any checklist change
+            if (userToken) {
+              await loadChecklistProgress([selectedCase], userToken);
+            }
+          }}
         />
       );
     } else {
@@ -3202,35 +3231,58 @@ export default function App() {
         </ScrollView>
 
         {/* Multi-select Toolbar - Visible only in selection mode */}
-        {selectionMode && (
-          <View style={styles.selectionToolbar}>
-            <View style={styles.selectionInfo}>
-              <Text style={styles.selectionText}>
-                {selectedCases.size} {selectedCases.size === 1 ? 'case' : 'cases'} selected
-              </Text>
+        {selectionMode && (() => {
+          const statuses = getSelectedCasesStatuses();
+          const allArchived = statuses.size === 1 && statuses.has('archived');
+          const hasArchived = statuses.has('archived');
+          const hasActive = statuses.has('active');
+
+          return (
+            <View style={styles.selectionToolbar}>
+              <View style={styles.selectionInfo}>
+                <Text style={styles.selectionText}>
+                  {selectedCases.size} {selectedCases.size === 1 ? 'case' : 'cases'} selected
+                </Text>
+              </View>
+              <View style={styles.selectionActions}>
+                <TouchableOpacity
+                  style={[styles.toolbarButton, styles.toolbarButtonSecondary]}
+                  onPress={exitSelectionMode}
+                >
+                  <Text style={styles.toolbarButtonText}>{t('cancel')}</Text>
+                </TouchableOpacity>
+
+                {/* Archive button - show if any active cases */}
+                {hasActive && (
+                  <TouchableOpacity
+                    style={[styles.toolbarButton, styles.toolbarButtonWarning]}
+                    onPress={archiveSelectedCases}
+                  >
+                    <Text style={styles.toolbarButtonText}>{t('archive')}</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Restore button - show if any archived cases */}
+                {hasArchived && (
+                  <TouchableOpacity
+                    style={[styles.toolbarButton, styles.toolbarButtonWarning]}
+                    onPress={restoreSelectedCases}
+                  >
+                    <Text style={styles.toolbarButtonText}>{t('restore')}</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Delete button */}
+                <TouchableOpacity
+                  style={[styles.toolbarButton, styles.toolbarButtonDanger]}
+                  onPress={deleteSelectedCases}
+                >
+                  <Text style={styles.toolbarButtonText}>{t('delete')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.selectionActions}>
-              <TouchableOpacity
-                style={[styles.toolbarButton, styles.toolbarButtonSecondary]}
-                onPress={exitSelectionMode}
-              >
-                <Text style={styles.toolbarButtonText}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toolbarButton, styles.toolbarButtonWarning]}
-                onPress={archiveSelectedCases}
-              >
-                <Text style={styles.toolbarButtonText}>{t('archive')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toolbarButton, styles.toolbarButtonDanger]}
-                onPress={deleteSelectedCases}
-              >
-                <Text style={styles.toolbarButtonText}>{t('delete')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+          );
+        })()}
 
         {/* New Case Button - Fixed at Bottom */}
         {!selectionMode && (

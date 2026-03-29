@@ -292,24 +292,54 @@ router.patch('/:caseId/:messageId/read', verifyJWT, async (req: Request, res: Re
 });
 
 /**
- * DELETE /messages/:caseId/:messageId
- * Delete a message (soft delete - marked as deleted)
- * Only sender can delete
+ * DELETE /messages/:messageId
+ * Delete a message by ID
+ * Only sender can delete their own messages
  *
- * Note: For privacy, deletions should be soft deletes
- * (mark as deleted, don't actually remove from DB for audit trail)
+ * Request params:
+ * - messageId: UUID
+ *
+ * Response:
+ * - success: true on successful deletion
  */
-router.delete('/:caseId/:messageId', verifyJWT, async (req: Request, res: Response) => {
+router.delete('/:messageId', verifyJWT, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { caseId, messageId } = req.params;
+    const { messageId } = req.params;
 
-    // In production:
-    // 1. Verify user is sender of message
-    // 2. Mark as deleted (or actually delete if policy allows)
+    // Verify message exists
+    const { data: message, error: fetchError } = await getSupabase()
+      .from('messages')
+      .select('sender_id, case_id')
+      .eq('id', messageId)
+      .single();
+
+    if (fetchError || !message) {
+      return res.status(404).json({
+        error: 'Message not found',
+      });
+    }
+
+    // Verify user is sender of message
+    if (message.sender_id !== userId) {
+      return res.status(403).json({
+        error: 'Only the sender can delete a message',
+      });
+    }
+
+    // Delete the message
+    const { error: deleteError } = await getSupabase()
+      .from('messages')
+      .delete()
+      .eq('id', messageId);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete message: ${deleteError.message}`);
+    }
 
     res.json({
       success: true,
+      message: 'Message deleted successfully',
     });
   } catch (error: any) {
     res.status(400).json({

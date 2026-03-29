@@ -79,6 +79,13 @@ const TRANSLATIONS = {
     // Button states
     loading: 'Loading...',
     saving: 'Saving...',
+    optional: 'Optional',
+    // Case Types
+    familyLaw: 'Family Law',
+    civil: 'Civil',
+    compliance: 'Compliance/Forms',
+    criminalDefense: 'Criminal Defense',
+    other: 'Other',
   },
   es: {
     // Login & Auth
@@ -154,13 +161,42 @@ const TRANSLATIONS = {
     // Button states
     loading: 'Cargando...',
     saving: 'Guardando...',
+    optional: 'Opcional',
+    // Case Types
+    familyLaw: 'Derecho de Familia',
+    civil: 'Civil',
+    compliance: 'Cumplimiento/Formularios',
+    criminalDefense: 'Defensa Criminal',
+    other: 'Otro',
   },
 };
 
-// Module-level cache for language preference to prevent resets during re-renders
-let cachedLanguage: 'en' | 'es' = 'en';
+// 🌍 Global AppState - never in React state, survives all re-renders
+const AppState = {
+  language: 'en' as 'en' | 'es',
+};
 
-const CASE_TYPES = ['Family Law', 'Civil', 'Compliance/Forms', 'Criminal Defense', 'Other'];
+// Translation accessor function - always reads from AppState.language
+const t = (key: string): string => {
+  const keys = key.split('.');
+  let value: any = TRANSLATIONS[AppState.language];
+
+  for (const k of keys) {
+    value = value[k];
+    if (!value) return key;
+  }
+
+  return value || key;
+};
+
+// Get case types with translated labels
+const getCaseTypes = () => [
+  { value: 'Family Law', label: t('familyLaw') },
+  { value: 'Civil', label: t('civil') },
+  { value: 'Compliance/Forms', label: t('compliance') },
+  { value: 'Criminal Defense', label: t('criminalDefense') },
+  { value: 'Other', label: t('other') },
+];
 
 const CHECKLIST_TEMPLATES: Record<string, string[]> = {
   'Family Law': [
@@ -231,7 +267,7 @@ function InviteClientModal({
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Invite Client</Text>
+              <Text style={styles.modalTitle}>{t('inviteClient')}</Text>
               <TouchableOpacity onPress={handleDismissKeyboard}>
                 <Text style={styles.modalCloseButton}>✕</Text>
               </TouchableOpacity>
@@ -239,10 +275,10 @@ function InviteClientModal({
 
             <View style={styles.modalForm}>
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Client Email Address</Text>
+                <Text style={styles.formLabel}>{t('clientEmail')}</Text>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="Enter client email"
+                  placeholder={t('enterClientEmail')}
                   placeholderTextColor="#666666"
                   value={inviteEmail}
                   onChangeText={setInviteEmail}
@@ -262,7 +298,7 @@ function InviteClientModal({
                   onPress={handleDismissKeyboard}
                   disabled={inviteLoading}
                 >
-                  <Text style={styles.inviteCancelButtonText}>Cancel</Text>
+                  <Text style={styles.inviteCancelButtonText}>{t('cancel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -273,7 +309,7 @@ function InviteClientModal({
                   {inviteLoading ? (
                     <ActivityIndicator color="#ffffff" />
                   ) : (
-                    <Text style={styles.inviteSendButtonText}>Send Invite</Text>
+                    <Text style={styles.inviteSendButtonText}>{t('sendInvite')}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -301,11 +337,14 @@ function CaseDetailScreen({
   inviteLoading,
   inviteError,
   messages,
+  setMessages,
   newMessage,
   setNewMessage,
   messagesLoading,
   messagesSendingId,
+  sendMessage,
   courtDates,
+  setCourtDates,
   newDateLabel,
   setNewDateLabel,
   newDateValue,
@@ -315,6 +354,7 @@ function CaseDetailScreen({
   showAddDateModal,
   setShowAddDateModal,
   datesLoading,
+  addCourtDate,
   caseDetailTab,
   setCaseDetailTab,
 }: {
@@ -330,11 +370,14 @@ function CaseDetailScreen({
   inviteLoading: boolean;
   inviteError: string;
   messages: any[];
+  setMessages: (msgs: any[]) => void;
   newMessage: string;
   setNewMessage: (msg: string) => void;
   messagesLoading: boolean;
   messagesSendingId: string | null;
+  sendMessage: (caseId: string) => void;
   courtDates: any[];
+  setCourtDates: (dates: any[]) => void;
   newDateLabel: string;
   setNewDateLabel: (label: string) => void;
   newDateValue: string;
@@ -344,6 +387,7 @@ function CaseDetailScreen({
   showAddDateModal: boolean;
   setShowAddDateModal: (show: boolean) => void;
   datesLoading: boolean;
+  addCourtDate: (caseId: string) => void;
   caseDetailTab: 'checklist' | 'messages' | 'documents' | 'dates';
   setCaseDetailTab: (tab: 'checklist' | 'messages' | 'documents' | 'dates') => void;
 }) {
@@ -352,6 +396,20 @@ function CaseDetailScreen({
   const [newItemText, setNewItemText] = useState('');
   const [loadingChecklist, setLoadingChecklist] = useState(true);
   const [addingItem, setAddingItem] = useState(false);
+
+  // Date Picker State
+  const [pickedDate, setPickedDate] = useState<Date>(new Date());
+  const [selectedMonth, setSelectedMonth] = useState(pickedDate.getMonth());
+  const [selectedDay, setSelectedDay] = useState(pickedDate.getDate());
+  const [selectedYear, setSelectedYear] = useState(pickedDate.getFullYear());
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showDayPicker, setShowDayPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
+
+  // Month names
+  const monthNames = AppState.language === 'es'
+    ? ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   // Load checklist from database
   useEffect(() => {
@@ -537,7 +595,12 @@ function CaseDetailScreen({
         </View>
 
         {/* Tabs */}
-        <View style={styles.detailTabs}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.detailTabs}
+          contentContainerStyle={{ gap: 8 }}
+        >
           {['checklist', 'messages', 'documents', 'dates'].map((tab: any) => (
             <TouchableOpacity
               key={tab}
@@ -586,20 +649,20 @@ function CaseDetailScreen({
               }}
             >
               <Text style={[styles.detailTabText, caseDetailTab === tab && styles.detailTabTextActive]}>
-                {tab === 'checklist' && '✓ Checklist'}
-                {tab === 'messages' && '💬 Messages'}
-                {tab === 'documents' && '📄 Documents'}
-                {tab === 'dates' && '📅 Dates'}
+                {tab === 'checklist' && `✓ ${t('checklist')}`}
+                {tab === 'messages' && `💬 ${t('messages')}`}
+                {tab === 'documents' && `📄 ${t('documents')}`}
+                {tab === 'dates' && `📅 ${t('keyDates')}`}
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         {/* Checklist Section */}
         {caseDetailTab === 'checklist' && (
         <View style={styles.detailSection}>
           <View style={styles.checklistHeader}>
-            <Text style={styles.detailSectionTitle}>Checklist</Text>
+            <Text style={styles.detailSectionTitle}>{t('checklist')}</Text>
             <TouchableOpacity
               style={styles.addItemButton}
               onPress={() => {
@@ -607,7 +670,7 @@ function CaseDetailScreen({
                 setNewItemText('');
               }}
             >
-              <Text style={styles.addItemButtonText}>{showAddItemInput ? '✕ Cancel' : '+ Add Item'}</Text>
+              <Text style={styles.addItemButtonText}>{showAddItemInput ? `✕ ${t('cancel')}` : `+ ${t('addItem')}`}</Text>
             </TouchableOpacity>
           </View>
 
@@ -615,7 +678,7 @@ function CaseDetailScreen({
             <View style={styles.addItemInputContainer}>
               <TextInput
                 style={styles.addItemInput}
-                placeholder="Enter item name"
+                placeholder={t('addItem')}
                 placeholderTextColor="#666666"
                 value={newItemText}
                 onChangeText={setNewItemText}
@@ -625,7 +688,7 @@ function CaseDetailScreen({
                 style={styles.addItemConfirmButton}
                 onPress={handleAddChecklistItem}
               >
-                <Text style={styles.addItemConfirmButtonText}>Add</Text>
+                <Text style={styles.addItemConfirmButtonText}>{t('addItem')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -633,10 +696,10 @@ function CaseDetailScreen({
           {loadingChecklist ? (
             <View style={{ paddingVertical: 20, alignItems: 'center' }}>
               <ActivityIndicator color="#0066cc" size="large" />
-              <Text style={{ color: '#888888', marginTop: 12 }}>Loading checklist...</Text>
+              <Text style={{ color: '#888888', marginTop: 12 }}>{t('loading')}...</Text>
             </View>
           ) : checklistItems.length === 0 && !showAddItemInput ? (
-            <Text style={styles.emptyChecklistText}>No checklist items yet</Text>
+            <Text style={styles.emptyChecklistText}>{t('noItems')}</Text>
           ) : (
             checklistItems.map((item) => (
               <TouchableOpacity
@@ -667,26 +730,38 @@ function CaseDetailScreen({
         {/* Messages Section */}
         {caseDetailTab === 'messages' && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailSectionTitle}>Messages</Text>
+          <Text style={styles.detailSectionTitle}>{t('messages')}</Text>
           {messagesLoading ? (
             <View style={{ paddingVertical: 20, alignItems: 'center' }}>
               <ActivityIndicator color="#0066cc" size="large" />
             </View>
           ) : messages.length === 0 ? (
-            <Text style={{ color: '#888888', marginLeft: 16 }}>No messages yet</Text>
+            <Text style={{ color: '#888888', marginLeft: 16 }}>{t('noMessages')}</Text>
           ) : (
-            messages.map((msg: any) => (
-              <View key={msg.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}>
-                <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
-                <Text style={{ color: '#ffffff', marginTop: 4 }}>{Buffer.from(msg.content_encrypted, 'base64').toString()}</Text>
-              </View>
-            ))
+            messages.map((msg: any) => {
+              try {
+                const decodedContent = msg.content_encrypted ? atob(msg.content_encrypted) : msg.content || '';
+                return (
+                  <View key={msg.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}>
+                    <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
+                    <Text style={{ color: '#ffffff', marginTop: 4 }}>{decodedContent}</Text>
+                  </View>
+                );
+              } catch (e) {
+                return (
+                  <View key={msg.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}>
+                    <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
+                    <Text style={{ color: '#ff4444' }}>[Error decoding message]</Text>
+                  </View>
+                );
+              }
+            })
           )}
 
           <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', gap: 8 }}>
             <TextInput
               style={{ flex: 1, borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a' }}
-              placeholder="Type a message..."
+              placeholder={t('typeMessage')}
               placeholderTextColor="#666666"
               value={newMessage}
               onChangeText={setNewMessage}
@@ -697,7 +772,7 @@ function CaseDetailScreen({
               onPress={() => sendMessage(caseData?.id)}
               disabled={!!messagesSendingId}
             >
-              <Text style={{ color: '#ffffff', fontWeight: '600' }}>Send</Text>
+              <Text style={{ color: '#ffffff', fontWeight: '600' }}>{t('sendMessage')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -706,8 +781,8 @@ function CaseDetailScreen({
         {/* Documents Section */}
         {caseDetailTab === 'documents' && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailSectionTitle}>Documents</Text>
-          <Text style={{ color: '#888888', marginLeft: 16, marginTop: 8 }}>Document upload coming soon</Text>
+          <Text style={styles.detailSectionTitle}>{t('documents')}</Text>
+          <Text style={{ color: '#888888', marginLeft: 16, marginTop: 8 }}>{t('noDocuments')}</Text>
         </View>
         )}
 
@@ -715,36 +790,115 @@ function CaseDetailScreen({
         {caseDetailTab === 'dates' && (
         <View style={styles.detailSection}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 }}>
-            <Text style={styles.detailSectionTitle}>Court Dates</Text>
+            <Text style={styles.detailSectionTitle}>{t('courtDates')}</Text>
             <TouchableOpacity
               style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#22c55e', borderRadius: 6 }}
               onPress={() => setShowAddDateModal(!showAddDateModal)}
             >
-              <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 12 }}>+ Add</Text>
+              <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 12 }}>+ {t('addDate')}</Text>
             </TouchableOpacity>
           </View>
 
           {showAddDateModal && (
             <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#1a1a1a', borderRadius: 8, marginBottom: 16 }}>
+              {/* Date Label Input */}
               <TextInput
                 style={{ borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a', marginBottom: 12 }}
-                placeholder="Date label (e.g. Court Hearing)"
+                placeholder={t('dateLabel')}
                 placeholderTextColor="#666666"
                 value={newDateLabel}
                 onChangeText={setNewDateLabel}
               />
-              <TextInput
-                style={{ borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a', marginBottom: 12 }}
-                placeholder="2026-04-15"
-                placeholderTextColor="#666666"
-                value={newDateValue}
-                onChangeText={setNewDateValue}
-              />
+
+              {/* Month Picker */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 6 }}>{AppState.language === 'es' ? 'Mes' : 'Month'}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {monthNames.map((month, idx) => (
+                      <TouchableOpacity
+                        key={month}
+                        style={[
+                          { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#333333' },
+                          selectedMonth === idx && { backgroundColor: '#0066cc', borderColor: '#0066cc' },
+                        ]}
+                        onPress={() => setSelectedMonth(idx)}
+                      >
+                        <Text style={[{ fontSize: 12, color: '#888888' }, selectedMonth === idx && { color: '#ffffff' }]}>
+                          {month.substring(0, 3)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Day Picker */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 6 }}>{AppState.language === 'es' ? 'Día' : 'Day'}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                      <TouchableOpacity
+                        key={day}
+                        style={[
+                          { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#333333' },
+                          selectedDay === day && { backgroundColor: '#0066cc', borderColor: '#0066cc' },
+                        ]}
+                        onPress={() => setSelectedDay(day)}
+                      >
+                        <Text style={[{ fontSize: 12, color: '#888888' }, selectedDay === day && { color: '#ffffff' }]}>
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Year Picker */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 6 }}>{AppState.language === 'es' ? 'Año' : 'Year'}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {[2026, 2027, 2028].map((year) => (
+                      <TouchableOpacity
+                        key={year}
+                        style={[
+                          { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#333333' },
+                          selectedYear === year && { backgroundColor: '#0066cc', borderColor: '#0066cc' },
+                        ]}
+                        onPress={() => setSelectedYear(year)}
+                      >
+                        <Text style={[{ fontSize: 12, color: '#888888' }, selectedYear === year && { color: '#ffffff' }]}>
+                          {year}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Selected Date Display */}
+              <View style={{ backgroundColor: '#0a0a0a', borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 12 }}>
+                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 4 }}>{AppState.language === 'es' ? 'Fecha Seleccionada' : 'Selected Date'}</Text>
+                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
+                  {monthNames[selectedMonth]} {selectedDay}, {selectedYear}
+                </Text>
+              </View>
+
+              {/* Add Date Button */}
               <TouchableOpacity
                 style={{ backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
-                onPress={() => addCourtDate(caseData?.id)}
+                onPress={() => {
+                  const selectedDate = new Date(selectedYear, selectedMonth, selectedDay);
+                  setPickedDate(selectedDate);
+                  setNewDateValue(selectedDate.toISOString().split('T')[0]);
+                  addCourtDate(caseData?.id);
+                  console.log('📅 Date added:', selectedDate.toISOString().split('T')[0]);
+                }}
               >
-                <Text style={{ color: '#ffffff', fontWeight: '600' }}>Add Date</Text>
+                <Text style={{ color: '#ffffff', fontWeight: '600' }}>{t('addDate')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -754,7 +908,7 @@ function CaseDetailScreen({
               <ActivityIndicator color="#0066cc" size="large" />
             </View>
           ) : courtDates.length === 0 ? (
-            <Text style={{ color: '#888888', marginLeft: 16 }}>No court dates scheduled</Text>
+            <Text style={{ color: '#888888', marginLeft: 16 }}>{t('noDates')}</Text>
           ) : (
             courtDates.map((date: any) => {
               const dateObj = new Date(date.occurred_at);
@@ -764,9 +918,15 @@ function CaseDetailScreen({
               return (
                 <View key={date.id} style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: bgColor, borderLeftWidth: 4, borderLeftColor: borderColor, marginBottom: 8, borderRadius: 4 }}>
                   <Text style={{ color: '#ffffff', fontWeight: '600', marginBottom: 4 }}>{date.title}</Text>
-                  <Text style={{ color: '#888888', fontSize: 12 }}>{dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                  <Text style={{ color: '#888888', fontSize: 12 }}>
+                    {dateObj.toLocaleDateString(AppState.language === 'es' ? 'es-ES' : 'en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </Text>
                   <Text style={{ color: isUpcoming ? '#22c55e' : '#666666', fontSize: 11, marginTop: 4 }}>
-                    {isUpcoming ? '📅 Upcoming' : '✓ Past'}
+                    {isUpcoming ? `📅 ${t('upcoming')}` : `✓ ${t('past')}`}
                   </Text>
                 </View>
               );
@@ -800,7 +960,7 @@ function CaseDetailScreen({
             style={styles.inviteButton}
             onPress={() => setShowInviteModal(true)}
           >
-            <Text style={styles.inviteButtonText}>Invite Client</Text>
+            <Text style={styles.inviteButtonText}>{t('inviteClient')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -858,13 +1018,13 @@ function ClientPortalScreen({
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>My Cases</Text>
+          <Text style={styles.title}>{t('myCases')}</Text>
           <TouchableOpacity onPress={onLogout}>
-            <Text style={styles.logoutButton}>Logout</Text>
+            <Text style={styles.logoutButton}>{t('logout')}</Text>
           </TouchableOpacity>
         </View>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#888888', fontSize: 16 }}>No cases assigned yet</Text>
+          <Text style={{ color: '#888888', fontSize: 16 }}>{t('noCase')}</Text>
         </View>
       </View>
     );
@@ -876,11 +1036,11 @@ function ClientPortalScreen({
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>My Case</Text>
+            <Text style={styles.title}>{t('myCase')}</Text>
             <Text style={styles.subtitle}>{caseData.title}</Text>
           </View>
           <TouchableOpacity onPress={onLogout}>
-            <Text style={styles.logoutButton}>Logout</Text>
+            <Text style={styles.logoutButton}>{t('logout')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -1055,7 +1215,7 @@ function NewCaseModal({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>New Case</Text>
+            <Text style={styles.modalTitle}>{t('newCaseTitle')}</Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.modalCloseButton}>✕</Text>
             </TouchableOpacity>
@@ -1068,10 +1228,10 @@ function NewCaseModal({
           >
             {/* Case Title */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Case Title *</Text>
+              <Text style={styles.formLabel}>{t('newCase')} *</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="Enter case title"
+                placeholder={t('caseTitlePlaceholder')}
                 placeholderTextColor="#666666"
                 value={newCaseTitle}
                 onChangeText={setNewCaseTitle}
@@ -1082,25 +1242,25 @@ function NewCaseModal({
 
             {/* Case Type */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Case Type *</Text>
+              <Text style={styles.formLabel}>{t('caseType')} *</Text>
               <View style={styles.caseTypePicker}>
-                {CASE_TYPES.map((type) => (
+                {getCaseTypes().map((caseType) => (
                   <TouchableOpacity
-                    key={type}
+                    key={caseType.value}
                     style={[
                       styles.caseTypeOption,
-                      newCaseType === type && styles.caseTypeOptionSelected,
+                      newCaseType === caseType.value && styles.caseTypeOptionSelected,
                     ]}
-                    onPress={() => setNewCaseType(type)}
+                    onPress={() => setNewCaseType(caseType.value)}
                     disabled={newCaseLoading}
                   >
                     <Text
                       style={[
                         styles.caseTypeOptionText,
-                        newCaseType === type && styles.caseTypeOptionTextSelected,
+                        newCaseType === caseType.value && styles.caseTypeOptionTextSelected,
                       ]}
                     >
-                      {type}
+                      {caseType.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1109,7 +1269,7 @@ function NewCaseModal({
 
             {/* Template Selection */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Checklist Template (Optional)</Text>
+              <Text style={styles.formLabel}>{t('selectTemplate')}</Text>
               <View style={styles.caseTypePicker}>
                 <TouchableOpacity
                   style={[
@@ -1125,7 +1285,7 @@ function NewCaseModal({
                       selectedTemplate === '' && styles.caseTypeOptionTextSelected,
                     ]}
                   >
-                    None
+                    {t('cancel')}
                   </Text>
                 </TouchableOpacity>
                 {Object.keys(CHECKLIST_TEMPLATES).map((templateName) => (
@@ -1153,10 +1313,10 @@ function NewCaseModal({
 
             {/* Docket Number */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Docket Number (Optional)</Text>
+              <Text style={styles.formLabel}>{t('docketNumber')} ({t('optional')})</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="Enter docket number"
+                placeholder={t('docketNumber')}
                 placeholderTextColor="#666666"
                 value={newCaseDocket}
                 onChangeText={setNewCaseDocket}
@@ -1168,18 +1328,34 @@ function NewCaseModal({
             {/* Error Message */}
             {newCaseError ? <Text style={styles.formError}>{newCaseError}</Text> : null}
 
-            {/* Create Button */}
-            <TouchableOpacity
-              style={[styles.createButton, newCaseLoading && styles.createButtonDisabled]}
-              onPress={onCreateCase}
-              disabled={newCaseLoading}
-            >
-              {newCaseLoading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.createButtonText}>Create Case</Text>
-              )}
-            </TouchableOpacity>
+            {/* Button Row */}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              {/* Cancel Button */}
+              <TouchableOpacity
+                style={[
+                  styles.createButton,
+                  { flex: 1, backgroundColor: '#666666' },
+                  newCaseLoading && styles.createButtonDisabled,
+                ]}
+                onPress={onClose}
+                disabled={newCaseLoading}
+              >
+                <Text style={styles.createButtonText}>{t('cancel')}</Text>
+              </TouchableOpacity>
+
+              {/* Create Button */}
+              <TouchableOpacity
+                style={[styles.createButton, { flex: 1 }, newCaseLoading && styles.createButtonDisabled]}
+                onPress={onCreateCase}
+                disabled={newCaseLoading}
+              >
+                {newCaseLoading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.createButtonText}>{t('createCase')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
 
             <View style={{ height: 40 }} />
           </ScrollView>
@@ -1294,7 +1470,7 @@ function AcceptInviteScreen({
       <SafeAreaView style={styles.container}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#0066cc" />
-          <Text style={{ color: '#888888', marginTop: 16 }}>Validating invite...</Text>
+          <Text style={{ color: '#888888', marginTop: 16 }}>{t('loading')}...</Text>
         </View>
       </SafeAreaView>
     );
@@ -1311,7 +1487,7 @@ function AcceptInviteScreen({
             style={{ backgroundColor: '#0066cc', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
             onPress={onClose}
           >
-            <Text style={{ color: '#ffffff', fontWeight: '600' }}>Go Back</Text>
+            <Text style={{ color: '#ffffff', fontWeight: '600' }}>{t('cancel')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -1327,7 +1503,7 @@ function AcceptInviteScreen({
         <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
           <View style={{ paddingHorizontal: 24, paddingVertical: 40, flex: 1, justifyContent: 'center' }}>
             <Text style={{ fontSize: 24, fontWeight: '700', color: '#ffffff', marginBottom: 8 }}>
-              Accept Invite
+              {t('acceptInvite')}
             </Text>
             <Text style={{ fontSize: 16, color: '#888888', marginBottom: 32 }}>
               {inviteData?.lawyerName} invited you to join their case
@@ -1340,10 +1516,10 @@ function AcceptInviteScreen({
             </View>
 
             <View style={{ marginBottom: 24 }}>
-              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>Full Name</Text>
+              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>{t('fullName')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Your full name"
+                placeholder={t('fullName')}
                 placeholderTextColor="#666666"
                 value={fullName}
                 onChangeText={setFullName}
@@ -1352,10 +1528,10 @@ function AcceptInviteScreen({
             </View>
 
             <View style={{ marginBottom: 24 }}>
-              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>Password</Text>
+              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>{t('password')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Create a password"
+                placeholder={t('createPassword')}
                 placeholderTextColor="#666666"
                 value={invitePassword}
                 onChangeText={setInvitePassword}
@@ -1374,7 +1550,7 @@ function AcceptInviteScreen({
               {accepting ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
-                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 16 }}>Create Account & Accept</Text>
+                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 16 }}>{t('createAccount')}</Text>
               )}
             </TouchableOpacity>
 
@@ -1383,7 +1559,7 @@ function AcceptInviteScreen({
               onPress={onClose}
               disabled={accepting}
             >
-              <Text style={{ color: '#0066cc', fontWeight: '600' }}>Cancel</Text>
+              <Text style={{ color: '#0066cc', fontWeight: '600' }}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1393,9 +1569,8 @@ function AcceptInviteScreen({
 }
 
 export default function App() {
-  // Initialize with cached language to prevent reset on re-renders
-  const [language, setLanguage] = useState<'en' | 'es'>(cachedLanguage);
-  const t = TRANSLATIONS[language];
+  // Force re-render trigger for global AppState changes (language, etc)
+  const [, forceUpdate] = useState(0);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1456,14 +1631,10 @@ export default function App() {
     const loadLanguage = async () => {
       try {
         const saved = await AsyncStorage.getItem('appLanguage');
-        if (saved === 'es') {
-          cachedLanguage = 'es';  // Update module-level cache
-          setLanguage('es');
-          console.log('✅ Loaded language preference: ES');
-        } else if (saved === 'en') {
-          cachedLanguage = 'en';  // Update module-level cache
-          setLanguage('en');
-          console.log('✅ Loaded language preference: EN');
+        if (saved === 'es' || saved === 'en') {
+          AppState.language = saved;
+          forceUpdate(n => n + 1); // Trigger re-render with loaded language
+          console.log(`✅ Loaded language preference: ${saved.toUpperCase()}`);
         }
       } catch (err) {
         console.error('Error loading language:', err);
@@ -1642,6 +1813,14 @@ export default function App() {
 
     setMessagesSendingId('pending');
     try {
+      const requestBody = {
+        caseId,
+        content_encrypted: btoa(newMessage.trim()),
+      };
+
+      console.log('📤 Sending message request:', JSON.stringify(requestBody, null, 2));
+      console.log('🔐 Auth token:', userToken.substring(0, 20) + '...');
+
       const response = await fetch(
         'https://lawyerbuddy-production.up.railway.app/messages',
         {
@@ -1650,22 +1829,35 @@ export default function App() {
             'Authorization': `Bearer ${userToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            caseId,
-            content_encrypted: Buffer.from(newMessage).toString('base64'),
-            nonce: Buffer.from('nonce').toString('base64'),
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
+      console.log('📥 API response status:', response.status, response.statusText);
+
       const data = await response.json();
+      console.log('📥 API response body:', JSON.stringify(data, null, 2));
+
       if (data.success) {
-        setMessages([...messages, data.message]);
+        console.log('✅ Message sent successfully');
+        console.log('📨 New message object:', JSON.stringify(data.message, null, 2));
+
+        // Optimistic update using functional setState to avoid closure issues
+        setMessages(prev => {
+          const updated = [...prev, data.message];
+          console.log('📊 Messages list updated. Total messages:', updated.length);
+          return updated;
+        });
+
+        // Clear input immediately
         setNewMessage('');
-        console.log('✅ Message sent');
+        console.log('🧹 Message input cleared');
+      } else {
+        console.warn('⚠️ API returned success: false', data);
       }
     } catch (err: any) {
-      console.error('Error sending message:', err);
+      console.error('❌ Error sending message:', err.message);
+      console.error('❌ Full error:', err);
     } finally {
       setMessagesSendingId(null);
     }
@@ -2025,11 +2217,14 @@ export default function App() {
           inviteLoading={inviteLoading}
           inviteError={inviteError}
           messages={messages}
+          setMessages={setMessages}
           newMessage={newMessage}
           setNewMessage={setNewMessage}
           messagesLoading={messagesLoading}
           messagesSendingId={messagesSendingId}
+          sendMessage={sendMessage}
           courtDates={courtDates}
+          setCourtDates={setCourtDates}
           newDateLabel={newDateLabel}
           setNewDateLabel={setNewDateLabel}
           newDateValue={newDateValue}
@@ -2039,6 +2234,7 @@ export default function App() {
           showAddDateModal={showAddDateModal}
           setShowAddDateModal={setShowAddDateModal}
           datesLoading={datesLoading}
+          addCourtDate={addCourtDate}
           caseDetailTab={caseDetailTab}
           setCaseDetailTab={setCaseDetailTab}
         />
@@ -2094,7 +2290,7 @@ export default function App() {
             </Text>
           </View>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
+            <Text style={styles.logoutButtonText}>{t('logout')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -2106,12 +2302,12 @@ export default function App() {
         >
           {/* My Cases Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Cases</Text>
+            <Text style={styles.sectionTitle}>{t('myCases')}</Text>
 
             {casesLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#0066cc" />
-                <Text style={styles.loadingText}>Loading cases...</Text>
+                <Text style={styles.loadingText}>{t('loading')}...</Text>
               </View>
             ) : cases.length > 0 ? (
               <View style={styles.casesList}>
@@ -2153,7 +2349,7 @@ export default function App() {
                       {caseItem.docket_number ? ` • Docket: ${caseItem.docket_number}` : ''}
                     </Text>
                     <Text style={styles.caseDetails}>
-                      {caseItem.client?.full_name ? `Client: ${caseItem.client.full_name}` : 'No client assigned'}
+                      {caseItem.client?.full_name ? `${t('client')}: ${caseItem.client.full_name}` : t('noClient')}
                     </Text>
                     {checklistProgress[caseItem.id] && (
                       <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#333333' }}>
@@ -2167,8 +2363,8 @@ export default function App() {
               </View>
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No cases yet</Text>
-                <Text style={styles.emptyStateSubtext}>Create your first case to get started</Text>
+                <Text style={styles.emptyStateText}>{t('noCases')}</Text>
+                <Text style={styles.emptyStateSubtext}>{t('createFirstCase')}</Text>
               </View>
             )}
           </View>
@@ -2182,7 +2378,7 @@ export default function App() {
             style={styles.newCaseButton}
             onPress={() => setShowNewCaseForm(true)}
           >
-            <Text style={styles.newCaseButtonText}>+ New Case</Text>
+            <Text style={styles.newCaseButtonText}>+ {t('newCase')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -2195,28 +2391,28 @@ export default function App() {
       {/* Language Toggle */}
       <View style={styles.languageToggle}>
         <TouchableOpacity
-          style={[styles.langButton, language === 'en' && styles.langButtonActive]}
+          style={[styles.langButton, AppState.language === 'en' && styles.langButtonActive]}
           onPress={async () => {
-            console.log('🌐 Language switched to EN');
-            cachedLanguage = 'en';  // Update module-level cache first
-            setLanguage('en');
+            AppState.language = 'en';
             await AsyncStorage.setItem('appLanguage', 'en');
+            forceUpdate(n => n + 1); // Trigger re-render
+            console.log('🌐 Language switched to EN');
           }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
+          <Text style={[styles.langText, AppState.language === 'en' && styles.langTextActive]}>EN</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.langButton, language === 'es' && styles.langButtonActive]}
+          style={[styles.langButton, AppState.language === 'es' && styles.langButtonActive]}
           onPress={async () => {
-            console.log('🌐 Language switched to ES');
-            cachedLanguage = 'es';  // Update module-level cache first
-            setLanguage('es');
+            AppState.language = 'es';
             await AsyncStorage.setItem('appLanguage', 'es');
+            forceUpdate(n => n + 1); // Trigger re-render
+            console.log('🌐 Language switched to ES');
           }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.langText, language === 'es' && styles.langTextActive]}>ES</Text>
+          <Text style={[styles.langText, AppState.language === 'es' && styles.langTextActive]}>ES</Text>
         </TouchableOpacity>
       </View>
 
@@ -2229,18 +2425,18 @@ export default function App() {
           <View style={styles.logoCircle}>
             <Text style={styles.logoInitials}>LB</Text>
           </View>
-          <Text style={styles.logoText}>{t.lawyerBuddy}</Text>
-          <Text style={styles.tagline}>{t.tuAbogado}</Text>
+          <Text style={styles.logoText}>{t('lawyerBuddy')}</Text>
+          <Text style={styles.tagline}>{t('tuAbogado')}</Text>
         </View>
 
         {/* Form */}
         <View style={styles.formContainer}>
           {/* Email Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.email}</Text>
+            <Text style={styles.label}>{t('email')}</Text>
             <TextInput
               style={styles.input}
-              placeholder={t.email}
+              placeholder={t('email')}
               placeholderTextColor="#666666"
               value={email}
               onChangeText={setEmail}
@@ -2252,10 +2448,10 @@ export default function App() {
 
           {/* Password Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.password}</Text>
+            <Text style={styles.label}>{t('password')}</Text>
             <TextInput
               style={styles.input}
-              placeholder={t.password}
+              placeholder={t('password')}
               placeholderTextColor="#666666"
               value={password}
               onChangeText={setPassword}
@@ -2276,16 +2472,16 @@ export default function App() {
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.loginButtonText}>{t.login}</Text>
+              <Text style={styles.loginButtonText}>{t('login')}</Text>
             )}
           </TouchableOpacity>
         </View>
 
         {/* Sign Up Link */}
         <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>{t.dontHaveAccount} </Text>
+          <Text style={styles.signupText}>{t('dontHaveAccount')} </Text>
           <TouchableOpacity>
-            <Text style={styles.signupLink}>{t.signUp}</Text>
+            <Text style={styles.signupLink}>{t('signUp')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -2774,10 +2970,8 @@ const styles = StyleSheet.create({
   },
   // Tab Styles
   detailTabs: {
-    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#333333',
     marginBottom: 16,

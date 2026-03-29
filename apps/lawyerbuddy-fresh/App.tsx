@@ -1,7 +1,25 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard, SafeAreaView, Linking, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+import DateTimePicker from '@react-native-community/datetimepicker';
 // import * as Notifications from 'expo-notifications'; // TODO: Set up push notifications
+
+// Native modules - lazy loaded to handle dev client where they may not be available
+let DocumentPicker: any = null;
+let FileSystem: any = null;
+try {
+  DocumentPicker = require('expo-document-picker');
+  FileSystem = require('expo-file-system');
+  console.log('✅ Native modules loaded (DocumentPicker, FileSystem)');
+} catch (e) {
+  console.log('⚠️  Native modules not available in dev client - document upload will show friendly error');
+}
+
+// Supabase client initialization
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://jjwiotunqmbphpkpayds.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impqd2lvdHVucW1icGhwa3BheWRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NjgxNzIsImV4cCI6MjA5MDI0NDE3Mn0.SsEAbh3HsneezP6CUD1CyLzBCdvz5ocDsPg5wNmIb80';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // 🌐 Translations
 const TRANSLATIONS = {
@@ -505,6 +523,7 @@ function CaseDetailScreen({
   onBack,
   styles,
   userToken,
+  userData,
   showInviteModal,
   setShowInviteModal,
   inviteEmail,
@@ -535,12 +554,28 @@ function CaseDetailScreen({
   setCaseDetailTab,
   deleteMessage,
   deleteCourtDate,
+  documents,
+  setDocuments,
+  documentsLoading,
+  uploadingDocument,
+  uploadDocument,
+  deleteDocument,
+  signDocument,
+  requiresSignature,
+  setRequiresSignature,
+  showSignatureModal,
+  setShowSignatureModal,
+  documentToSign,
+  setDocumentToSign,
+  signatureFullName,
+  setSignatureFullName,
   onChecklistChanged,
 }: {
   caseData: any;
   onBack: () => void;
   styles: any;
   userToken: string | null;
+  userData: { full_name: string; role: string } | null;
   showInviteModal: boolean;
   setShowInviteModal: (show: boolean) => void;
   inviteEmail: string;
@@ -571,6 +606,21 @@ function CaseDetailScreen({
   setCaseDetailTab: (tab: 'checklist' | 'messages' | 'documents' | 'dates') => void;
   deleteMessage: (id: string) => void;
   deleteCourtDate: (id: string) => void;
+  documents?: any[];
+  setDocuments?: (docs: any[]) => void;
+  documentsLoading?: boolean;
+  uploadingDocument?: boolean;
+  uploadDocument?: (caseId: string) => void;
+  deleteDocument?: (caseId: string, docId: string, filePath: string) => void;
+  signDocument?: (docId: string, fullName: string) => void;
+  requiresSignature?: boolean;
+  setRequiresSignature?: (req: boolean) => void;
+  showSignatureModal?: boolean;
+  setShowSignatureModal?: (show: boolean) => void;
+  documentToSign?: any;
+  setDocumentToSign?: (doc: any) => void;
+  signatureFullName?: string;
+  setSignatureFullName?: (name: string) => void;
   onChecklistChanged?: () => Promise<void>;
 }) {
   const [checklistItems, setChecklistItems] = useState<any[]>([]);
@@ -584,9 +634,20 @@ function CaseDetailScreen({
   const [selectedMonth, setSelectedMonth] = useState(pickedDate.getMonth());
   const [selectedDay, setSelectedDay] = useState(pickedDate.getDate());
   const [selectedYear, setSelectedYear] = useState(pickedDate.getFullYear());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showDayPicker, setShowDayPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
+
+  // Court Dates Multi-Select State
+  const [dateSelectionMode, setDateSelectionMode] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+
+  // Documents State in Detail Screen
+  const [showDocumentSignatureModal, setShowDocumentSignatureModal] = useState(false);
+  const [documentToSignInDetail, setDocumentToSignInDetail] = useState<any>(null);
+  const [signatureName, setSignatureName] = useState('');
+  const [documentRequiresSignature, setDocumentRequiresSignature] = useState(false);
 
   // Message Settings State
   const [messagesEnabled, setMessagesEnabled] = useState(true);
@@ -1087,8 +1148,154 @@ function CaseDetailScreen({
         {/* Documents Section */}
         {caseDetailTab === 'documents' && (
         <View style={styles.detailSection}>
-          <Text style={styles.detailSectionTitle}>{t('documents')}</Text>
-          <Text style={{ color: '#888888', marginLeft: 16, marginTop: 8 }}>{t('noDocuments')}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 }}>
+            <Text style={styles.detailSectionTitle}>{t('documents')}</Text>
+            {userData?.role === 'lawyer' && (
+              <TouchableOpacity
+                style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#22c55e', borderRadius: 6 }}
+                onPress={() => uploadDocument(caseData?.id)}
+                disabled={uploadingDocument}
+              >
+                {uploadingDocument ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 12 }}>+ {t('uploadDocument')}</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {userData?.role === 'lawyer' && (
+            <View style={{ paddingHorizontal: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 4,
+                  borderWidth: 2,
+                  borderColor: '#0066cc',
+                  backgroundColor: requiresSignature ? '#0066cc' : 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onPress={() => setRequiresSignature(!requiresSignature)}
+              >
+                {requiresSignature && <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>✓</Text>}
+              </TouchableOpacity>
+              <Text style={{ color: '#888888', fontSize: 12 }}>Requires Signature</Text>
+            </View>
+          )}
+
+          {documents.filter((doc: any) => doc.caseId === caseData?.id).length === 0 ? (
+            <Text style={{ color: '#888888', marginLeft: 16, marginTop: 8 }}>No documents yet</Text>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginHorizontal: 16 }}>
+              {documents.filter((doc: any) => doc.caseId === caseData?.id).map((doc: any) => (
+                <TouchableOpacity
+                  key={doc.id}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#0066cc',
+                  }}
+                  onPress={() => {
+                    if (doc.requiresSignature && !doc.isSigned) {
+                      setDocumentToSignInDetail(doc);
+                      setShowDocumentSignatureModal(true);
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (userData?.role === 'lawyer') {
+                      Alert.alert('Delete Document', `Delete ${doc.fileName}?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          onPress: () => deleteDocument(caseData?.id, doc.id, doc.filePath),
+                          style: 'destructive',
+                        },
+                      ]);
+                    }
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 14, flex: 1 }}>
+                          {doc.fileName}
+                        </Text>
+                        {doc.requiresSignature && !doc.isSigned && <Text style={{ color: '#ff9800', fontSize: 16 }}>✍️</Text>}
+                        {doc.isSigned && <Text style={{ color: '#22c55e', fontSize: 16 }}>✅</Text>}
+                      </View>
+                      <Text style={{ color: '#888888', fontSize: 12, marginBottom: 2 }}>
+                        {doc.uploadedBy} • {new Date(doc.uploadedAt).toLocaleDateString()}
+                      </Text>
+                      {doc.fileSize && (
+                        <Text style={{ color: '#666666', fontSize: 11 }}>
+                          {(doc.fileSize / 1024).toFixed(1)} KB
+                        </Text>
+                      )}
+                      {doc.isSigned && (
+                        <Text style={{ color: '#22c55e', fontSize: 11, marginTop: 4 }}>
+                          Signed by {doc.signedBy} • {new Date(doc.signedAt).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Signature Modal */}
+          <Modal visible={showDocumentSignatureModal} transparent animationType="fade" onRequestClose={() => setShowDocumentSignatureModal(false)}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.7)', justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ backgroundColor: '#1a1a1a', borderRadius: 12, padding: 20, marginHorizontal: 16, minWidth: 300 }}>
+                <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '600', marginBottom: 4 }}>Sign Document</Text>
+                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 16 }}>
+                  {documentToSignInDetail?.fileName}
+                </Text>
+
+                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 6 }}>Full Legal Name</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a', marginBottom: 16, fontSize: 14 }}
+                  placeholder="Type your full legal name"
+                  placeholderTextColor="#666666"
+                  value={signatureName}
+                  onChangeText={setSignatureName}
+                />
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#666666', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                    onPress={() => {
+                      setShowDocumentSignatureModal(false);
+                      setDocumentToSignInDetail(null);
+                      setSignatureName('');
+                    }}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: '600' }}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                    onPress={() => {
+                      if (!signatureName.trim()) {
+                        Alert.alert('Error', 'Please enter your full name');
+                        return;
+                      }
+                      signDocument(documentToSignInDetail?.id, signatureName);
+                    }}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: '600' }}>Sign Document</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
         )}
 
@@ -1116,92 +1323,102 @@ function CaseDetailScreen({
                 onChangeText={setNewDateLabel}
               />
 
-              {/* Month Picker */}
+              {/* Native DatePicker Button (iOS) */}
               <View style={{ marginBottom: 12 }}>
-                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 6 }}>{AppState.language === 'es' ? 'Mes' : 'Month'}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {monthNames.map((month, idx) => (
-                      <TouchableOpacity
-                        key={month}
-                        style={[
-                          { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#333333' },
-                          selectedMonth === idx && { backgroundColor: '#0066cc', borderColor: '#0066cc' },
-                        ]}
-                        onPress={() => setSelectedMonth(idx)}
-                      >
-                        <Text style={[{ fontSize: 12, color: '#888888' }, selectedMonth === idx && { color: '#ffffff' }]}>
-                          {month.substring(0, 3)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
+                <TouchableOpacity
+                  style={{ borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: '#0a0a0a' }}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={{ color: '#888888', fontSize: 12, marginBottom: 4 }}>Date (tap to pick)</Text>
+                  <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
+                    {pickedDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Day Picker */}
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 6 }}>{AppState.language === 'es' ? 'Día' : 'Day'}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                      <TouchableOpacity
-                        key={day}
-                        style={[
-                          { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#333333' },
-                          selectedDay === day && { backgroundColor: '#0066cc', borderColor: '#0066cc' },
-                        ]}
-                        onPress={() => setSelectedDay(day)}
-                      >
-                        <Text style={[{ fontSize: 12, color: '#888888' }, selectedDay === day && { color: '#ffffff' }]}>
-                          {day}
-                        </Text>
+              {/* DateTimePicker Modal */}
+              <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.7)', justifyContent: 'flex-end' }}>
+                  <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 20, paddingTop: 16, paddingHorizontal: 16 }}>
+                    {/* Header */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '600' }}>Select Date</Text>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <Text style={{ color: '#888888', fontSize: 24 }}>✕</Text>
                       </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
+                    </View>
 
-              {/* Year Picker */}
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 6 }}>{AppState.language === 'es' ? 'Año' : 'Year'}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {[2026, 2027, 2028].map((year) => (
-                      <TouchableOpacity
-                        key={year}
-                        style={[
-                          { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#333333' },
-                          selectedYear === year && { backgroundColor: '#0066cc', borderColor: '#0066cc' },
-                        ]}
-                        onPress={() => setSelectedYear(year)}
-                      >
-                        <Text style={[{ fontSize: 12, color: '#888888' }, selectedYear === year && { color: '#ffffff' }]}>
-                          {year}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
+                    {/* DateTimePicker */}
+                    <View style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#333333', marginBottom: 16 }}>
+                      <DateTimePicker
+                        value={pickedDate}
+                        mode="date"
+                        display="spinner"
+                        minimumDate={new Date()}
+                        textColor="#ffffff"
+                        onChange={(event, date) => {
+                          if (date) {
+                            setPickedDate(date);
+                            // Also update text input with formatted date
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const year = date.getFullYear();
+                            const formattedDate = `${month}/${day}/${year}`;
+                            console.log('📅 DateTimePicker selected:', formattedDate);
+                            setNewDateValue(formattedDate);
+                          }
+                        }}
+                      />
+                    </View>
 
-              {/* Selected Date Display */}
-              <View style={{ backgroundColor: '#0a0a0a', borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 12 }}>
-                <Text style={{ color: '#888888', fontSize: 12, marginBottom: 4 }}>{AppState.language === 'es' ? 'Fecha Seleccionada' : 'Selected Date'}</Text>
-                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
-                  {monthNames[selectedMonth]} {selectedDay}, {selectedYear}
-                </Text>
-              </View>
+                    {/* Confirm Button */}
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                      onPress={() => setShowDatePicker(false)}
+                    >
+                      <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 16 }}>Confirm Date</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
 
               {/* Add Date Button */}
               <TouchableOpacity
                 style={{ backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
                 onPress={() => {
-                  const selectedDate = new Date(selectedYear, selectedMonth, selectedDay);
+                  console.log('🔵 Add Date button pressed');
+                  console.log('  - newDateValue:', newDateValue);
+                  console.log('  - newDateLabel:', newDateLabel);
+                  console.log('  - caseData?.id:', caseData?.id);
+                  console.log('  - newDateSeverity:', newDateSeverity);
+
+                  // Parse MM/DD/YYYY format
+                  const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+                  const match = newDateValue.match(dateRegex);
+
+                  if (!match) {
+                    console.warn('⚠️  Date format invalid. Expected MM/DD/YYYY, got:', newDateValue);
+                    alert('Please enter date in MM/DD/YYYY format');
+                    return;
+                  }
+
+                  const month = parseInt(match[1], 10) - 1; // Month is 0-indexed
+                  const day = parseInt(match[2], 10);
+                  const year = parseInt(match[3], 10);
+
+                  // Validate date
+                  const selectedDate = new Date(year, month, day);
+                  if (selectedDate.getMonth() !== month || selectedDate.getDate() !== day) {
+                    console.warn('⚠️  Invalid date:', selectedDate);
+                    alert('Invalid date');
+                    return;
+                  }
+
                   // Format date as ISO string at midnight
                   const isoDate = selectedDate.toISOString();
                   setPickedDate(selectedDate);
-                  console.log('📅 Adding court date:', isoDate);
+                  console.log('✅ Parsed date successfully:', isoDate);
+                  console.log('📤 Calling addCourtDate with:', { caseId: caseData?.id, date: isoDate, label: newDateLabel, severity: newDateSeverity });
                   // Pass the date directly to avoid async state issues
                   addCourtDate(caseData?.id, isoDate, newDateLabel, newDateSeverity);
                 }}
@@ -1218,40 +1435,97 @@ function CaseDetailScreen({
           ) : courtDates.length === 0 ? (
             <Text style={{ color: '#888888', marginLeft: 16 }}>{t('noDates')}</Text>
           ) : (
-            courtDates.map((date: any) => {
-              const dateObj = new Date(date.occurred_at);
-              const isUpcoming = dateObj > new Date();
-              const bgColor = isUpcoming ? '#22c55e20' : '#66666620';
-              const borderColor = isUpcoming ? '#22c55e' : '#666666';
-              return (
-                <TouchableOpacity
-                  key={date.id}
-                  style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: bgColor, borderLeftWidth: 4, borderLeftColor: borderColor, marginBottom: 8, borderRadius: 4 }}
-                  onLongPress={() => {
-                    Alert.alert(t('delete'), 'Delete this date?', [
-                      { text: t('cancel'), style: 'cancel' },
-                      {
-                        text: t('delete'),
-                        onPress: () => deleteCourtDate(date.id),
-                        style: 'destructive',
-                      },
-                    ]);
-                  }}
-                >
-                  <Text style={{ color: '#ffffff', fontWeight: '600', marginBottom: 4 }}>{date.title}</Text>
-                  <Text style={{ color: '#888888', fontSize: 12 }}>
-                    {dateObj.toLocaleDateString(AppState.language === 'es' ? 'es-ES' : 'en-US', {
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
-                  </Text>
-                  <Text style={{ color: isUpcoming ? '#22c55e' : '#666666', fontSize: 11, marginTop: 4 }}>
-                    {isUpcoming ? `📅 ${t('upcoming')}` : `✓ ${t('past')}`}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
+            <View>
+              {courtDates.map((date: any) => {
+                const dateObj = new Date(date.occurred_at);
+                const isUpcoming = dateObj > new Date();
+                const isSelected = selectedDates.has(date.id);
+                const bgColor = isSelected ? '#0066cc40' : (isUpcoming ? '#22c55e20' : '#66666620');
+                const borderColor = isSelected ? '#0066cc' : (isUpcoming ? '#22c55e' : '#666666');
+
+                return (
+                  <TouchableOpacity
+                    key={date.id}
+                    style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: bgColor, borderLeftWidth: 4, borderLeftColor: borderColor, marginBottom: 8, borderRadius: 4, flexDirection: 'row', alignItems: 'center' }}
+                    onPress={() => {
+                      if (dateSelectionMode) {
+                        // Toggle selection
+                        const newSelected = new Set(selectedDates);
+                        if (newSelected.has(date.id)) {
+                          newSelected.delete(date.id);
+                        } else {
+                          newSelected.add(date.id);
+                        }
+                        setSelectedDates(newSelected);
+                      }
+                    }}
+                    onLongPress={() => {
+                      if (!dateSelectionMode) {
+                        console.log('📋 Entering court date selection mode');
+                        setDateSelectionMode(true);
+                        setSelectedDates(new Set([date.id]));
+                      }
+                    }}
+                  >
+                    {dateSelectionMode && (
+                      <View style={{ marginRight: 12, width: 24, height: 24, borderRadius: 4, borderWidth: 2, borderColor: '#0066cc', backgroundColor: isSelected ? '#0066cc' : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                        {isSelected && <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: 'bold' }}>✓</Text>}
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#ffffff', fontWeight: '600', marginBottom: 4 }}>{date.title}</Text>
+                      <Text style={{ color: '#888888', fontSize: 12 }}>
+                        {dateObj.toLocaleDateString(AppState.language === 'es' ? 'es-ES' : 'en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </Text>
+                      <Text style={{ color: isUpcoming ? '#22c55e' : '#666666', fontSize: 11, marginTop: 4 }}>
+                        {isUpcoming ? `📅 ${t('upcoming')}` : `✓ ${t('past')}`}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Delete Selected Toolbar */}
+              {dateSelectionMode && (
+                <View style={{ backgroundColor: '#1a1a1a', borderTopWidth: 1, borderTopColor: '#333333', paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#666666', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                    onPress={() => {
+                      setDateSelectionMode(false);
+                      setSelectedDates(new Set());
+                    }}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: '600' }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#dc2626', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                    onPress={async () => {
+                      if (selectedDates.size === 0) return;
+
+                      console.log('🗑️  Deleting selected dates:', Array.from(selectedDates));
+
+                      // Delete all selected dates in parallel
+                      const deletePromises = Array.from(selectedDates).map((dateId) => {
+                        console.log('  - Deleting date:', dateId);
+                        return deleteCourtDate(dateId);
+                      });
+
+                      await Promise.all(deletePromises);
+
+                      console.log('✅ All selected dates deleted');
+                      setDateSelectionMode(false);
+                      setSelectedDates(new Set());
+                    }}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: '600' }}>Delete Selected ({selectedDates.size})</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           )}
         </View>
         )}
@@ -1853,6 +2127,8 @@ function AcceptInviteScreen({
                 onChangeText={setInvitePassword}
                 secureTextEntry
                 editable={!accepting}
+                textContentType="oneTimeCode"
+                autoComplete="off"
               />
             </View>
 
@@ -1936,6 +2212,11 @@ export default function App() {
   // Documents State
   const [documents, setDocuments] = useState<any[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [documentToSign, setDocumentToSign] = useState<any>(null);
+  const [signatureFullName, setSignatureFullName] = useState('');
+  const [requiresSignature, setRequiresSignature] = useState(false);
 
   // Court Dates/Deadlines State
   const [courtDates, setCourtDates] = useState<any[]>([]);
@@ -2054,9 +2335,10 @@ export default function App() {
         setCases(data.cases);
         console.log('✅ Cases loaded successfully');
 
-        // Load checklist progress for each case
+        // Load checklist progress in parallel (don't wait for cases to finish rendering)
         if (token) {
-          loadChecklistProgress(data.cases, token);
+          console.log('📋 Starting checklist progress load in parallel...');
+          loadChecklistProgress(data.cases, token); // Don't await - runs in background
         }
       } else {
         console.error('❌ Failed to fetch cases:', data);
@@ -2073,7 +2355,8 @@ export default function App() {
   const loadChecklistProgress = async (casesToLoad: any[], token: string) => {
     const progress: Record<string, { total: number; completed: number }> = {};
 
-    for (const caseItem of casesToLoad) {
+    // Fetch all checklists in parallel
+    const checklistPromises = casesToLoad.map(async (caseItem) => {
       try {
         const response = await fetch(
           `https://lawyerbuddy-production.up.railway.app/cases/${caseItem.id}/checklist`,
@@ -2098,8 +2381,10 @@ export default function App() {
       } catch (err: any) {
         console.error(`⚠️  Failed to load checklist for case ${caseItem.id}:`, err);
       }
-    }
+    });
 
+    // Wait for all checklist requests to complete
+    await Promise.all(checklistPromises);
     setChecklistProgress(progress);
   };
 
@@ -2318,6 +2603,196 @@ export default function App() {
     } catch (err: any) {
       console.error('❌ Error adding court date:', err);
       alert('Error adding court date: ' + err.message);
+    }
+  };
+
+  const uploadDocument = async (caseId: string) => {
+    if (!userToken) {
+      Alert.alert('Error', 'Not authenticated. Please log in again.');
+      return;
+    }
+
+    // Check if native modules are available (they're not in dev client)
+    if (!DocumentPicker || !FileSystem) {
+      Alert.alert('Not Available', 'Document upload requires a production build. Coming soon!');
+      return;
+    }
+
+    try {
+      setUploadingDocument(true);
+
+      // Pick a document
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+      });
+
+      console.log('📄 DocumentPicker result:', JSON.stringify(result, null, 2));
+
+      if (result.canceled) {
+        console.log('⚠️ Document selection cancelled');
+        setUploadingDocument(false);
+        return;
+      }
+
+      const file = result.assets[0];
+      console.log('📄 Selected file:', {
+        name: file.name,
+        size: file.size,
+        mimeType: file.mimeType,
+        uri: file.uri,
+      });
+
+      // Read file as base64
+      let fileContent: string;
+      try {
+        fileContent = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        console.log('✅ File read successfully, size:', fileContent.length);
+      } catch (readError) {
+        console.error('❌ Error reading file:', readError);
+        Alert.alert('Error', 'Could not read file. Please try again.');
+        setUploadingDocument(false);
+        return;
+      }
+
+      // Generate unique filename with timestamp
+      const timestamp = Date.now();
+      const fileName = `${caseId}/${timestamp}_${file.name}`;
+
+      // Upload to Supabase Storage with proper headers for base64
+      console.log('📤 Uploading to Supabase Storage:', fileName);
+
+      const uploadResponse = await fetch(
+        `${supabaseUrl}/storage/v1/object/case-files/${fileName}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${userToken}`,
+            'Content-Type': 'application/octet-stream',
+            'x-upsert': 'false',
+          },
+          body: Buffer.from(fileContent, 'base64'),
+        }
+      );
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('❌ Upload failed:', uploadResponse.status, errorText);
+        Alert.alert('Upload Error', `Failed to upload file: ${uploadResponse.status}`);
+        setUploadingDocument(false);
+        return;
+      }
+
+      console.log('✅ File uploaded to storage');
+
+      // Save metadata to database via API
+      const documentMetadata = {
+        caseId,
+        fileName: file.name,
+        filePath: fileName,
+        fileSize: file.size,
+        mimeType: file.mimeType,
+        uploadedBy: userData?.full_name || 'Unknown',
+        uploadedAt: new Date().toISOString(),
+        requiresSignature: requiresSignature,
+        isSigned: false,
+        signedBy: null,
+        signedAt: null,
+      };
+
+      console.log('📋 Saving document metadata:', documentMetadata);
+
+      // Add to local documents list
+      const newDoc = {
+        id: `${timestamp}_${file.name}`,
+        caseId,
+        ...documentMetadata,
+      };
+
+      setDocuments([...documents, newDoc]);
+
+      console.log('✅ Document uploaded and metadata saved');
+      setUploadingDocument(false);
+      setRequiresSignature(false);
+
+      Alert.alert('Success', 'Document uploaded successfully!');
+    } catch (error: any) {
+      console.error('❌ Error uploading document:', error);
+      Alert.alert('Error', 'Failed to upload document: ' + error.message);
+      setUploadingDocument(false);
+    }
+  };
+
+  const deleteDocument = async (caseId: string, documentId: string, filePath: string) => {
+    if (!userToken) {
+      Alert.alert('Error', 'Not authenticated.');
+      return;
+    }
+
+    try {
+      console.log('🗑️ Deleting document:', documentId, 'from path:', filePath);
+
+      // Delete from Supabase Storage
+      const deleteResponse = await fetch(
+        `${supabaseUrl}/storage/v1/object/case-files/${filePath}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${userToken}`,
+          },
+        }
+      );
+
+      if (!deleteResponse.ok) {
+        console.error('⚠️ Storage deletion failed:', deleteResponse.status);
+        // Continue with local deletion even if storage delete fails
+      }
+
+      // Remove from local documents list
+      setDocuments(documents.filter((doc) => doc.id !== documentId));
+
+      console.log('✅ Document deleted');
+      Alert.alert('Success', 'Document deleted.');
+    } catch (error: any) {
+      console.error('❌ Error deleting document:', error);
+      Alert.alert('Error', 'Failed to delete document: ' + error.message);
+    }
+  };
+
+  const signDocument = async (documentId: string, fullName: string) => {
+    if (!userToken) {
+      Alert.alert('Error', 'Not authenticated.');
+      return;
+    }
+
+    try {
+      console.log('✍️ Signing document:', documentId, 'by:', fullName);
+
+      // Update document with signature
+      const docIndex = documents.findIndex((doc) => doc.id === documentId);
+      if (docIndex === -1) return;
+
+      const updatedDoc = {
+        ...documents[docIndex],
+        isSigned: true,
+        signedBy: fullName,
+        signedAt: new Date().toISOString(),
+      };
+
+      const newDocuments = [...documents];
+      newDocuments[docIndex] = updatedDoc;
+      setDocuments(newDocuments);
+
+      console.log('✅ Document signed');
+      setShowSignatureModal(false);
+      setDocumentToSign(null);
+      setSignatureFullName('');
+
+      Alert.alert('Success', `Document signed by ${fullName}`);
+    } catch (error: any) {
+      console.error('❌ Error signing document:', error);
+      Alert.alert('Error', 'Failed to sign document: ' + error.message);
     }
   };
 
@@ -2815,37 +3290,38 @@ export default function App() {
 
       if (response.ok) {
         console.log('✅ Invite sent successfully');
-        Alert.alert(t('inviteSent'), `Link expires in 7 days`, [
-          { text: t('cancel'), onPress: () => {}, style: 'cancel' },
-          {
-            text: t('ok'),
-            onPress: () => {
-              // Show template save alert if case has checklist items
-              const selectedCase = cases.find((c) => c.id === caseId);
-              if (selectedCase && selectedCase.checklist && selectedCase.checklist.length > 0) {
-                Alert.alert(
-                  'Save Template?',
-                  `Save this ${selectedCase.case_type} case setup as a template for future cases?`,
-                  [
-                    {
-                      text: t('cancel'),
-                      onPress: () => {
-                        console.log('Template not saved');
-                      },
-                    },
-                    {
-                      text: 'Save Template',
-                      onPress: async () => {
-                        await saveTemplate(selectedCase.case_type || 'General', selectedCase.checklist);
-                        Alert.alert('Success', 'Template saved! You can apply it when creating new cases.');
-                      },
-                    },
-                  ]
-                );
-              }
-            },
-          },
-        ]);
+
+        // Show template save alert after successful invite
+        const selectedCase = cases.find((c) => c.id === caseId);
+        if (selectedCase) {
+          Alert.alert(
+            'Save Template?',
+            `Save this ${selectedCase.case_type} case setup as a template for future cases?`,
+            [
+              {
+                text: 'No',
+                onPress: () => {
+                  console.log('Template not saved');
+                  // Show initial success alert
+                  Alert.alert(t('inviteSent'), `Link expires in 7 days`);
+                },
+              },
+              {
+                text: 'Yes',
+                onPress: async () => {
+                  if (selectedCase.checklist && selectedCase.checklist.length > 0) {
+                    await saveTemplate(selectedCase.case_type || 'General', selectedCase.checklist);
+                    Alert.alert('Success', 'Template saved! You can apply it when creating new cases.');
+                  } else {
+                    Alert.alert('No Items', 'This case has no checklist items to save as a template.');
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert(t('inviteSent'), `Link expires in 7 days`);
+        }
 
         setInviteEmail('');
         setShowInviteModal(false);
@@ -2896,6 +3372,7 @@ export default function App() {
           }}
           styles={styles}
           userToken={userToken}
+          userData={userData}
           showInviteModal={showInviteModal}
           setShowInviteModal={setShowInviteModal}
           inviteEmail={inviteEmail}
@@ -2926,6 +3403,21 @@ export default function App() {
           setCaseDetailTab={setCaseDetailTab}
           deleteMessage={deleteMessage}
           deleteCourtDate={deleteCourtDate}
+          documents={documents}
+          setDocuments={setDocuments}
+          documentsLoading={documentsLoading}
+          uploadingDocument={uploadingDocument}
+          uploadDocument={uploadDocument}
+          deleteDocument={deleteDocument}
+          signDocument={signDocument}
+          requiresSignature={requiresSignature}
+          setRequiresSignature={setRequiresSignature}
+          showSignatureModal={showSignatureModal}
+          setShowSignatureModal={setShowSignatureModal}
+          documentToSign={documentToSign}
+          setDocumentToSign={setDocumentToSign}
+          signatureFullName={signatureFullName}
+          setSignatureFullName={setSignatureFullName}
           onChecklistChanged={async () => {
             // Refresh checklist progress on the dashboard after any checklist change
             if (userToken) {
@@ -3391,6 +3883,8 @@ export default function App() {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 editable={!loading}
+                textContentType="oneTimeCode"
+                autoComplete="off"
               />
               <TouchableOpacity
                 style={{

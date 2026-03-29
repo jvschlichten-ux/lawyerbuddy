@@ -1734,6 +1734,8 @@ export default function App() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberEmail, setRememberEmail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -1791,21 +1793,30 @@ export default function App() {
   // Tab State for Case Detail
   const [caseDetailTab, setCaseDetailTab] = useState<'checklist' | 'messages' | 'documents' | 'dates'>('checklist');
 
-  // Load language preference on app startup
+  // Load language preference and saved email on app startup
   useEffect(() => {
-    const loadLanguage = async () => {
+    const loadStoredData = async () => {
       try {
-        const saved = await AsyncStorage.getItem('appLanguage');
-        if (saved === 'es' || saved === 'en') {
-          AppState.language = saved;
+        // Load language
+        const savedLang = await AsyncStorage.getItem('appLanguage');
+        if (savedLang === 'es' || savedLang === 'en') {
+          AppState.language = savedLang;
           forceUpdate(n => n + 1); // Trigger re-render with loaded language
-          console.log(`✅ Loaded language preference: ${saved.toUpperCase()}`);
+          console.log(`✅ Loaded language preference: ${savedLang.toUpperCase()}`);
+        }
+
+        // Load saved email if remember email was checked
+        const savedEmail = await AsyncStorage.getItem('savedEmail');
+        if (savedEmail) {
+          setEmail(savedEmail);
+          setRememberEmail(true);
+          console.log('✅ Loaded saved email');
         }
       } catch (err) {
-        console.error('Error loading language:', err);
+        console.error('Error loading stored data:', err);
       }
     };
-    loadLanguage();
+    loadStoredData();
   }, []);
 
   useEffect(() => {
@@ -2232,6 +2243,13 @@ export default function App() {
       await AsyncStorage.setItem('userToken', data.session.access_token);
       await AsyncStorage.setItem('userRole', role);
 
+      // Save or clear email based on remember email checkbox
+      if (rememberEmail) {
+        await AsyncStorage.setItem('savedEmail', email);
+      } else {
+        await AsyncStorage.removeItem('savedEmail');
+      }
+
       // Set success state
       setUserData({
         full_name: name,
@@ -2240,7 +2258,6 @@ export default function App() {
       setUserRole(role);
       setUserToken(data.session.access_token);
       setSuccess(true);
-      setEmail('');
       setPassword('');
     } catch (error: any) {
       console.error('Network error:', error);
@@ -2605,7 +2622,7 @@ export default function App() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Good {getTimeOfDay()},</Text>
+            <Text style={styles.greeting}>{t('good')} {t(getTimeOfDay())},</Text>
             <Text style={styles.userName}>
               {userData && userData.full_name
                 ? userData.full_name.split(' ')[0]
@@ -2862,15 +2879,48 @@ export default function App() {
           {/* Password Input */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>{t('password')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('password')}
-              placeholderTextColor="#666666"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              editable={!loading}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder={t('password')}
+                placeholderTextColor="#666666"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  padding: 8,
+                }}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={{ fontSize: 18 }}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Remember Email Checkbox */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+            <TouchableOpacity
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                borderWidth: 2,
+                borderColor: '#0066cc',
+                backgroundColor: rememberEmail ? '#0066cc' : 'transparent',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 8,
+              }}
+              onPress={() => setRememberEmail(!rememberEmail)}
+            >
+              {rememberEmail && <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
+            </TouchableOpacity>
+            <Text style={{ color: '#888888', fontSize: 14 }}>Save email for next time</Text>
           </View>
 
           {/* Error Message */}

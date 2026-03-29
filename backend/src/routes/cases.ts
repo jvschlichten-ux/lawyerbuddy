@@ -113,17 +113,9 @@ router.get('/', verifyJWT, async (req: Request, res: Response) => {
     // Filter by user role (lawyer sees own cases, client sees assigned cases)
     query = query.or(`lawyer_id.eq.${userId},client_id.eq.${userId}`);
 
-    // Filter by deletion status
-    // NOTE: Using status = 'deleted' instead of deleted_at column (migration pending)
-    if (showTrash) {
-      // Show only soft-deleted cases
-      query = query.eq('status', 'deleted');
-    } else {
-      // Show only non-deleted cases (default)
-      query = query.neq('status', 'deleted');
-    }
-
-    if (status && status !== 'deleted') {
+    // Filter by status if provided
+    // NOTE: Soft delete feature pending - will add deleted_at column in migration
+    if (status) {
       query = query.eq('status', status);
     }
 
@@ -313,7 +305,7 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
     // Verify user is lawyer for this case
     const { data: caseData, error: caseError } = await getSupabase()
       .from('cases')
-      .select('lawyer_id, status')
+      .select('lawyer_id')
       .eq('id', id)
       .single();
 
@@ -329,47 +321,23 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
       });
     }
 
-    if (permanent === 'true') {
-      // Permanent delete - only if already in trash
-      if (caseData.status !== 'deleted') {
-        return res.status(400).json({
-          error: 'Only cases in trash can be permanently deleted',
-        });
-      }
+    // Hard delete case (cascade delete via foreign keys)
+    // NOTE: Soft delete with trash recovery pending - requires deleted_at column migration
+    const { error: deleteError } = await getSupabase()
+      .from('cases')
+      .delete()
+      .eq('id', id);
 
-      const { error: deleteError } = await getSupabase()
-        .from('cases')
-        .delete()
-        .eq('id', id);
-
-      if (deleteError) {
-        throw new Error(`Case deletion failed: ${deleteError.message}`);
-      }
-
-      await auditLog.logCaseDeletion(userId, id);
-
-      res.json({
-        success: true,
-        message: `Case ${id} permanently deleted`,
-      });
-    } else {
-      // Soft delete (set status to 'deleted')
-      const { error: updateError } = await getSupabase()
-        .from('cases')
-        .update({ status: 'deleted' })
-        .eq('id', id);
-
-      if (updateError) {
-        throw new Error(`Case soft delete failed: ${updateError.message}`);
-      }
-
-      await auditLog.logCaseDeletion(userId, id);
-
-      res.json({
-        success: true,
-        message: `Case ${id} moved to trash`,
-      });
+    if (deleteError) {
+      throw new Error(`Case deletion failed: ${deleteError.message}`);
     }
+
+    await auditLog.logCaseDeletion(userId, id);
+
+    res.json({
+      success: true,
+      message: `Case ${id} deleted successfully`,
+    });
   } catch (error: any) {
     res.status(400).json({
       error: error.message || 'Case deletion failed',
@@ -380,66 +348,12 @@ router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
 /**
  * PATCH /cases/:id/recover
  * Recover a soft-deleted case from trash (within 30 days)
- * Lawyer only
- *
- * Response:
- * - case: Recovered case object
+ * TODO: Implement after deleted_at column is added via migration
+ * Currently commented out - soft delete feature pending
  */
-router.patch('/:id/recover', verifyJWT, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).userId;
-    const { id } = req.params;
-
-    // Verify user is lawyer for this case
-    const { data: caseData, error: caseError } = await getSupabase()
-      .from('cases')
-      .select('lawyer_id, status')
-      .eq('id', id)
-      .single();
-
-    if (caseError || !caseData) {
-      return res.status(404).json({
-        error: 'Case not found',
-      });
-    }
-
-    if (caseData.lawyer_id !== userId) {
-      return res.status(403).json({
-        error: 'Only the case lawyer can recover cases',
-      });
-    }
-
-    if (caseData.status !== 'deleted') {
-      return res.status(400).json({
-        error: 'Case is not in trash',
-      });
-    }
-
-    // Recover case by setting status back to 'active'
-    const { data: recovered, error: updateError } = await getSupabase()
-      .from('cases')
-      .update({ status: 'active' })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      throw new Error(`Case recovery failed: ${updateError.message}`);
-    }
-
-    await auditLog.logCaseUpdate(userId, id, { status: 'active' });
-
-    res.json({
-      success: true,
-      message: `Case ${id} recovered from trash`,
-      case: recovered,
-    });
-  } catch (error: any) {
-    res.status(400).json({
-      error: error.message || 'Case recovery failed',
-    });
-  }
-});
+// router.patch('/:id/recover', verifyJWT, async (req: Request, res: Response) => {
+//   // Implementation pending - requires deleted_at column
+// });
 
 /**
  * POST /cases/:id/invite

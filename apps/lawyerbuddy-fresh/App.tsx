@@ -703,6 +703,33 @@ function CaseDetailScreen({
     }
   };
 
+  const deleteChecklistItem = async (itemId: string) => {
+    if (!userToken || !caseData?.id) return;
+
+    try {
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseData.id}/checklist/${itemId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success || response.ok) {
+        console.log('✅ Checklist item deleted:', itemId);
+        setChecklistItems(prev => prev.filter(i => i.id !== itemId));
+      } else {
+        console.error('❌ Delete failed:', data);
+      }
+    } catch (err: any) {
+      console.error('❌ Error deleting checklist item:', err);
+    }
+  };
+
   // Guard against null/undefined caseData
   if (!caseData) {
     return (
@@ -874,7 +901,18 @@ function CaseDetailScreen({
                 key={item.id}
                 style={styles.checklistItem}
                 onPress={() => toggleChecklistItem(item)}
+                onLongPress={() => {
+                  Alert.alert(t('delete'), 'Delete this item?', [
+                    { text: t('cancel'), style: 'cancel' },
+                    {
+                      text: t('delete'),
+                      onPress: () => deleteChecklistItem(item.id),
+                      style: 'destructive',
+                    },
+                  ]);
+                }}
                 disabled={addingItem}
+                delayLongPress={500}
               >
                 <View style={styles.checklistCheckbox}>
                   {item.is_complete && (
@@ -910,17 +948,43 @@ function CaseDetailScreen({
               try {
                 const decodedContent = msg.content_encrypted ? atob(msg.content_encrypted) : msg.content || '';
                 return (
-                  <View key={msg.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}>
+                  <TouchableOpacity
+                    key={msg.id}
+                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}
+                    onLongPress={() => {
+                      Alert.alert(t('delete'), 'Delete this message?', [
+                        { text: t('cancel'), style: 'cancel' },
+                        {
+                          text: t('delete'),
+                          onPress: () => deleteMessage(msg.id),
+                          style: 'destructive',
+                        },
+                      ]);
+                    }}
+                  >
                     <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
                     <Text style={{ color: '#ffffff', marginTop: 4 }}>{decodedContent}</Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               } catch (e) {
                 return (
-                  <View key={msg.id} style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}>
+                  <TouchableOpacity
+                    key={msg.id}
+                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}
+                    onLongPress={() => {
+                      Alert.alert(t('delete'), 'Delete this message?', [
+                        { text: t('cancel'), style: 'cancel' },
+                        {
+                          text: t('delete'),
+                          onPress: () => deleteMessage(msg.id),
+                          style: 'destructive',
+                        },
+                      ]);
+                    }}
+                  >
                     <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
                     <Text style={{ color: '#ff4444' }}>[Error decoding message]</Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               }
             })
@@ -1084,7 +1148,20 @@ function CaseDetailScreen({
               const bgColor = isUpcoming ? '#22c55e20' : '#66666620';
               const borderColor = isUpcoming ? '#22c55e' : '#666666';
               return (
-                <View key={date.id} style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: bgColor, borderLeftWidth: 4, borderLeftColor: borderColor, marginBottom: 8, borderRadius: 4 }}>
+                <TouchableOpacity
+                  key={date.id}
+                  style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: bgColor, borderLeftWidth: 4, borderLeftColor: borderColor, marginBottom: 8, borderRadius: 4 }}
+                  onLongPress={() => {
+                    Alert.alert(t('delete'), 'Delete this date?', [
+                      { text: t('cancel'), style: 'cancel' },
+                      {
+                        text: t('delete'),
+                        onPress: () => deleteCourtDate(date.id),
+                        style: 'destructive',
+                      },
+                    ]);
+                  }}
+                >
                   <Text style={{ color: '#ffffff', fontWeight: '600', marginBottom: 4 }}>{date.title}</Text>
                   <Text style={{ color: '#888888', fontSize: 12 }}>
                     {dateObj.toLocaleDateString(AppState.language === 'es' ? 'es-ES' : 'en-US', {
@@ -1096,7 +1173,7 @@ function CaseDetailScreen({
                   <Text style={{ color: isUpcoming ? '#22c55e' : '#666666', fontSize: 11, marginTop: 4 }}>
                     {isUpcoming ? `📅 ${t('upcoming')}` : `✓ ${t('past')}`}
                   </Text>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
@@ -2031,6 +2108,60 @@ export default function App() {
       console.error('❌ Full error:', err);
     } finally {
       setMessagesSendingId(null);
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    if (!userToken) return;
+
+    try {
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/messages/${messageId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success || response.ok) {
+        console.log('✅ Message deleted:', messageId);
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+      } else {
+        console.error('❌ Delete failed:', data);
+      }
+    } catch (err: any) {
+      console.error('❌ Error deleting message:', err);
+    }
+  };
+
+  const deleteCourtDate = async (dateId: string) => {
+    if (!userToken) return;
+
+    try {
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/events/${dateId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success || response.ok) {
+        console.log('✅ Court date deleted:', dateId);
+        setCourtDates(prev => prev.filter(d => d.id !== dateId));
+      } else {
+        console.error('❌ Delete failed:', data);
+      }
+    } catch (err: any) {
+      console.error('❌ Error deleting court date:', err);
     }
   };
 

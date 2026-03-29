@@ -352,6 +352,42 @@ const getChecklistTemplates = (): Record<string, string[]> => {
   };
 };
 
+// Get status color based on case status
+const getStatusColor = (status: string): string => {
+  switch (status?.toLowerCase()) {
+    case 'open':
+      return '#22c55e';
+    case 'in_progress':
+      return '#3b82f6';
+    case 'closed':
+      return '#888888';
+    case 'active':
+      return '#22c55e';
+    case 'archived':
+      return '#888888';
+    default:
+      return '#0066cc';
+  }
+};
+
+// Get translated status label
+const getStatusLabel = (status: string): string => {
+  const normalizedStatus = status?.toLowerCase() || 'active';
+  switch (normalizedStatus) {
+    case 'active':
+      return t('active');
+    case 'in_progress':
+    case 'inprogress':
+      return t('inProgress');
+    case 'closed':
+      return t('closed');
+    case 'archived':
+      return t('archived');
+    default:
+      return status;
+  }
+};
+
 // Invite Client Modal Component
 function InviteClientModal({
   visible,
@@ -2427,40 +2463,6 @@ export default function App() {
       setInviteError('Network error: ' + err.message);
     } finally {
       setInviteLoading(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'open':
-        return '#22c55e';
-      case 'in_progress':
-        return '#3b82f6';
-      case 'closed':
-        return '#888888';
-      case 'active':
-        return '#22c55e';
-      case 'archived':
-        return '#888888';
-      default:
-        return '#0066cc';
-    }
-  };
-
-  const getStatusLabel = (status: string): string => {
-    const normalizedStatus = status?.toLowerCase() || 'active';
-    switch (normalizedStatus) {
-      case 'active':
-        return t('active');
-      case 'in_progress':
-      case 'inprogress':
-        return t('inProgress');
-      case 'closed':
-        return t('closed');
-      case 'archived':
-        return t('archived');
-      default:
-        return status;
     }
   };
 

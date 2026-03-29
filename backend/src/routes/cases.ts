@@ -231,19 +231,112 @@ router.patch('/:id', verifyJWT, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
+    const { title, status, docketNumber, jurisdiction } = req.body;
 
-    // In production:
-    // 1. Verify user is lawyer_id for this case (RLS)
-    // 2. Update case with provided fields
-    // 3. Create audit log entry
+    // Verify user is lawyer for this case
+    const { data: caseData, error: caseError } = await getSupabase()
+      .from('cases')
+      .select('lawyer_id')
+      .eq('id', id)
+      .single();
+
+    if (caseError || !caseData) {
+      return res.status(404).json({
+        error: 'Case not found',
+      });
+    }
+
+    if (caseData.lawyer_id !== userId) {
+      return res.status(403).json({
+        error: 'Only the case lawyer can update cases',
+      });
+    }
+
+    // Build update object with provided fields
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title;
+    if (status !== undefined) updateData.status = status;
+    if (docketNumber !== undefined) updateData.docket_number = docketNumber;
+    if (jurisdiction !== undefined) updateData.jurisdiction = jurisdiction;
+
+    // Update case
+    const { data: updated, error: updateError } = await getSupabase()
+      .from('cases')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw new Error(`Case update failed: ${updateError.message}`);
+    }
+
+    // Log update for audit trail
+    await auditLog.logCaseUpdate(userId, id, updateData);
 
     res.json({
       success: true,
-      case: { id },
+      case: updated,
     });
   } catch (error: any) {
     res.status(400).json({
       error: error.message || 'Case update failed',
+    });
+  }
+});
+
+/**
+ * DELETE /cases/:id
+ * Delete case (lawyer only)
+ * Requires authentication + case ownership
+ *
+ * Response:
+ * - success: true on successful deletion
+ */
+router.delete('/:id', verifyJWT, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+
+    // Verify user is lawyer for this case
+    const { data: caseData, error: caseError } = await getSupabase()
+      .from('cases')
+      .select('lawyer_id')
+      .eq('id', id)
+      .single();
+
+    if (caseError || !caseData) {
+      return res.status(404).json({
+        error: 'Case not found',
+      });
+    }
+
+    if (caseData.lawyer_id !== userId) {
+      return res.status(403).json({
+        error: 'Only the case lawyer can delete cases',
+      });
+    }
+
+    // Delete case (cascade delete via foreign keys)
+    const { error: deleteError } = await getSupabase()
+      .from('cases')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      throw new Error(`Case deletion failed: ${deleteError.message}`);
+    }
+
+    // Log deletion for audit trail
+    await auditLog.logCaseDeletion(userId, id);
+
+    res.json({
+      success: true,
+      message: `Case ${id} deleted successfully`,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      error: error.message || 'Case deletion failed',
     });
   }
 });

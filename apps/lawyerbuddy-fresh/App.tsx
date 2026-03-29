@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard, SafeAreaView, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal, Keyboard, SafeAreaView, Linking, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -86,6 +86,18 @@ const TRANSLATIONS = {
     compliance: 'Compliance/Forms',
     criminalDefense: 'Criminal Defense',
     other: 'Other',
+    // Case Management
+    archive: 'Archive',
+    delete: 'Delete',
+    restore: 'Restore',
+    deletePermanently: 'Delete Permanently',
+    deleteConfirm: 'Are you sure? This cannot be undone.',
+    archived: 'Archived',
+    showArchived: 'Show Archived',
+    hideArchived: 'Hide Archived',
+    all: 'All',
+    search: 'Search cases...',
+    filter: 'Filter',
   },
   es: {
     // Login & Auth
@@ -168,6 +180,18 @@ const TRANSLATIONS = {
     compliance: 'Cumplimiento/Formularios',
     criminalDefense: 'Defensa Criminal',
     other: 'Otro',
+    // Case Management
+    archive: 'Archivar',
+    delete: 'Eliminar',
+    restore: 'Restaurar',
+    deletePermanently: 'Eliminar Permanentemente',
+    deleteConfirm: '¿Estás seguro? Esto no se puede deshacer.',
+    archived: 'Archivado',
+    showArchived: 'Mostrar Archivados',
+    hideArchived: 'Ocultar Archivados',
+    all: 'Todos',
+    search: 'Buscar casos...',
+    filter: 'Filtro',
   },
 };
 
@@ -1596,6 +1620,11 @@ export default function App() {
   // Case Detail State
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
+  // Case List Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('active');
+  const [showArchived, setShowArchived] = useState(false);
+
   // Invite Client Modal State
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -2088,6 +2117,145 @@ export default function App() {
     }
   };
 
+  const archiveCase = async (caseId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'archived' }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ Case archived:', caseId);
+        // Update local state for immediate UI feedback
+        setCases(prev =>
+          prev.map(c =>
+            c.id === caseId ? { ...c, status: 'archived' } : c
+          )
+        );
+      }
+    } catch (err: any) {
+      console.error('❌ Error archiving case:', err);
+    }
+  };
+
+  const restoreCase = async (caseId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'active' }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ Case restored:', caseId);
+        // Update local state for immediate UI feedback
+        setCases(prev =>
+          prev.map(c =>
+            c.id === caseId ? { ...c, status: 'active' } : c
+          )
+        );
+      }
+    } catch (err: any) {
+      console.error('❌ Error restoring case:', err);
+    }
+  };
+
+  const deleteCase = async (caseId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      console.log('Delete response:', data, 'Status:', response.status);
+
+      if (response.ok || data.success) {
+        console.log('✅ Case deleted:', caseId);
+        // Update local state for immediate UI feedback
+        setCases(prev => prev.filter(c => c.id !== caseId));
+      } else {
+        console.error('❌ Delete failed:', data);
+      }
+    } catch (err: any) {
+      console.error('❌ Error deleting case:', err);
+    }
+  };
+
+  const handleCaseLongPress = (caseId: string, caseStatus: string) => {
+    const buttons: any[] = [];
+
+    if (caseStatus === 'archived') {
+      buttons.push({
+        text: t('restore'),
+        onPress: () => restoreCase(caseId),
+        style: 'default',
+      });
+    } else {
+      buttons.push({
+        text: t('archive'),
+        onPress: () => archiveCase(caseId),
+        style: 'default',
+      });
+    }
+
+    buttons.push({
+      text: t('delete'),
+      onPress: () => {
+        Alert.alert(t('deletePermanently'), t('deleteConfirm'), [
+          { text: t('cancel'), onPress: () => {}, style: 'cancel' },
+          {
+            text: t('delete'),
+            onPress: () => deleteCase(caseId),
+            style: 'destructive',
+          },
+        ]);
+      },
+      style: 'destructive',
+    });
+
+    buttons.push({
+      text: t('cancel'),
+      style: 'cancel',
+    });
+
+    Alert.alert(
+      t('archive'), // Title
+      `${t('caseType')}: Choose an action`,
+      buttons
+    );
+  };
+
   const handleLogout = async () => {
     console.log('🔴 Logging out...');
     await AsyncStorage.removeItem('userToken');
@@ -2260,6 +2428,38 @@ export default function App() {
 
   // Lawyer Dashboard Screen
   if (success && userData) {
+    // Filter cases based on search query and status filter
+    const filteredCases = cases.filter((caseItem) => {
+      // Filter by search query
+      const matchesSearch = caseItem.title
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+
+      // Filter by status
+      const caseStatus = caseItem.status || 'active';
+      let matchesStatus = true;
+
+      if (statusFilter === 'all') {
+        // 'All' filter should exclude archived unless showArchived is true
+        matchesStatus = showArchived ? true : caseStatus !== 'archived';
+      } else if (statusFilter === 'active') {
+        // Active filter shows only active cases
+        matchesStatus = caseStatus === 'active';
+      } else if (statusFilter === 'archived') {
+        // Archived filter shows only archived cases
+        matchesStatus = caseStatus === 'archived';
+      }
+
+      return matchesSearch && matchesStatus;
+    });
+
+    // Sort by most recently updated
+    filteredCases.sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+
     return (
       <SafeAreaView style={styles.container}>
         <NewCaseModal
@@ -2304,14 +2504,79 @@ export default function App() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('myCases')}</Text>
 
+            {/* Search Input */}
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder={t('search')}
+                placeholderTextColor="#666666"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+
+            {/* Filter Buttons */}
+            <View style={styles.filterButtonsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  statusFilter === 'all' && styles.filterButtonActive,
+                ]}
+                onPress={() => setStatusFilter('all')}
+              >
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    statusFilter === 'all' && styles.filterButtonTextActive,
+                  ]}
+                >
+                  {t('all')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  statusFilter === 'active' && styles.filterButtonActive,
+                ]}
+                onPress={() => setStatusFilter('active')}
+              >
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    statusFilter === 'active' && styles.filterButtonTextActive,
+                  ]}
+                >
+                  {t('active')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  statusFilter === 'archived' && styles.filterButtonActive,
+                ]}
+                onPress={() => setStatusFilter('archived')}
+              >
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    statusFilter === 'archived' && styles.filterButtonTextActive,
+                  ]}
+                >
+                  {t('archived')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {casesLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#0066cc" />
                 <Text style={styles.loadingText}>{t('loading')}...</Text>
               </View>
-            ) : cases.length > 0 ? (
+            ) : filteredCases.length > 0 ? (
               <View style={styles.casesList}>
-                {cases.map((caseItem, index) => (
+                {filteredCases.map((caseItem, index) => (
                   <TouchableOpacity
                     key={index}
                     style={[
@@ -2322,7 +2587,12 @@ export default function App() {
                       console.log('📂 Navigating to case detail:', caseItem.id, caseItem.title);
                       setSelectedCaseId(caseItem.id);
                     }}
+                    onLongPress={() => {
+                      console.log('📋 Long press on case:', caseItem.id);
+                      handleCaseLongPress(caseItem.id, caseItem.status || 'active');
+                    }}
                     activeOpacity={0.7}
+                    delayLongPress={500}
                   >
                     <View style={styles.caseCardHeader}>
                       <View style={{ flex: 1 }}>
@@ -2363,9 +2633,29 @@ export default function App() {
               </View>
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>{t('noCases')}</Text>
-                <Text style={styles.emptyStateSubtext}>{t('createFirstCase')}</Text>
+                <Text style={styles.emptyStateText}>
+                  {searchQuery || statusFilter !== 'active'
+                    ? 'No matching cases'
+                    : t('noCases')}
+                </Text>
+                <Text style={styles.emptyStateSubtext}>
+                  {searchQuery || statusFilter !== 'active'
+                    ? 'Try adjusting your filters'
+                    : t('createFirstCase')}
+                </Text>
               </View>
+            )}
+
+            {/* Show/Hide Archived Toggle */}
+            {cases.some((c) => c.status === 'archived') && statusFilter !== 'archived' && (
+              <TouchableOpacity
+                style={styles.toggleArchivedButton}
+                onPress={() => setShowArchived(!showArchived)}
+              >
+                <Text style={styles.toggleArchivedText}>
+                  {showArchived ? t('hideArchived') : t('showArchived')}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -2733,6 +3023,64 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginBottom: 18,
     letterSpacing: 0.5,
+  },
+  searchContainer: {
+    marginBottom: 14,
+  },
+  searchInput: {
+    borderWidth: 1.5,
+    borderColor: '#333333',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#ffffff',
+    backgroundColor: '#0a0a0a',
+  },
+  filterButtonsContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+    justifyContent: 'space-between',
+  },
+  filterButton: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#333333',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    backgroundColor: '#0a0a0a',
+  },
+  filterButtonActive: {
+    backgroundColor: '#0066cc',
+    borderColor: '#0066cc',
+  },
+  filterButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888888',
+    textTransform: 'uppercase',
+  },
+  filterButtonTextActive: {
+    color: '#ffffff',
+  },
+  toggleArchivedButton: {
+    marginTop: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: '#333333',
+    borderRadius: 8,
+    backgroundColor: '#0a0a0a',
+    alignItems: 'center',
+  },
+  toggleArchivedText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0066cc',
+    textTransform: 'uppercase',
   },
   casesList: {
     gap: 14,

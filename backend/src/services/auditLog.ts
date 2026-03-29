@@ -31,6 +31,8 @@ export type AuditAction =
   | 'ATTORNEY_NOTE_UPDATE'
   | 'CASE_EXPORT'
   | 'CASE_CREATE'
+  | 'CASE_UPDATE'
+  | 'CASE_DELETE'
   | 'CHECKLIST_UPDATE'
   | 'INVITE_GENERATE'
   | 'INVITE_ACCEPT';
@@ -307,6 +309,52 @@ export async function logInviteAccept(
     targetId: caseId,
     metadata: {
       email,
+    },
+  });
+}
+
+/**
+ * Log case update (status change, archive, etc)
+ *
+ * @param userId - Lawyer updating case
+ * @param caseId - Case being updated
+ * @param updates - Fields that were updated
+ */
+export async function logCaseUpdate(
+  userId: string,
+  caseId: string,
+  updates: Record<string, any>
+): Promise<void> {
+  await createAuditLog({
+    actorId: userId,
+    action: 'CASE_UPDATE',
+    targetType: 'case',
+    targetId: caseId,
+    metadata: {
+      updates,
+      updateTime: new Date().toISOString(),
+    },
+  });
+}
+
+/**
+ * Log case deletion
+ * CRITICAL: Track all case deletions for compliance
+ *
+ * @param userId - Lawyer deleting case
+ * @param caseId - Case being deleted
+ */
+export async function logCaseDeletion(
+  userId: string,
+  caseId: string
+): Promise<void> {
+  await createAuditLog({
+    actorId: userId,
+    action: 'CASE_DELETE',
+    targetType: 'case',
+    targetId: caseId,
+    metadata: {
+      deletionTime: new Date().toISOString(),
     },
   });
 }

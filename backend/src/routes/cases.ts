@@ -416,11 +416,14 @@ router.post('/:id/invite', verifyJWT, async (req: Request, res: Response) => {
     const inviteLink = `https://lawyerbuddy-production.up.railway.app/invite/${token}`;
     const resendApiKey = process.env.RESEND_API_KEY;
 
+    console.log('📧 Invite email - API key:', resendApiKey ? 'present' : 'missing');
+
     if (resendApiKey) {
       try {
+        console.log('📧 Sending invite email to:', invitedEmail);
         const resend = new Resend(resendApiKey);
-        await resend.emails.send({
-          from: 'invites@lawyerbuddy.io',
+        const emailResponse = await resend.emails.send({
+          from: 'onboarding@resend.dev',
           to: invitedEmail,
           subject: `You're invited to a case on LawyerBuddy`,
           html: `
@@ -444,11 +447,13 @@ router.post('/:id/invite', verifyJWT, async (req: Request, res: Response) => {
             </div>
           `,
         });
-        console.log('✅ Invite email sent to:', invitedEmail);
+        console.log('✅ Invite email sent successfully:', { to: invitedEmail, messageId: emailResponse.data?.id || 'unknown' });
       } catch (emailError: any) {
-        console.error('⚠️ Failed to send invite email:', emailError.message);
+        console.error('⚠️ Failed to send invite email:', { to: invitedEmail, error: emailError.message, code: emailError.code });
         // Don't fail the request if email sending fails - token is still generated
       }
+    } else {
+      console.warn('⚠️ RESEND_API_KEY not set in environment - invite emails will not be sent');
     }
 
     // Log invite generation for audit trail

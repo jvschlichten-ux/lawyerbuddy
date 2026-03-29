@@ -16,6 +16,7 @@ import { getSupabase } from '../lib/supabase';
 import * as authService from '../services/auth';
 import * as auditLog from '../services/auditLog';
 import * as notificationHandlers from '../services/notificationHandlers';
+import { Resend } from 'resend';
 
 const router = Router();
 
@@ -381,7 +382,7 @@ router.post('/:id/invite', verifyJWT, async (req: Request, res: Response) => {
     // Verify user is lawyer_id for this case
     const { data: caseData, error: caseError } = await getSupabase()
       .from('cases')
-      .select('lawyer_id')
+      .select('lawyer_id, title')
       .eq('id', id)
       .single();
 
@@ -397,12 +398,58 @@ router.post('/:id/invite', verifyJWT, async (req: Request, res: Response) => {
       });
     }
 
+    // Get lawyer's profile info
+    const { data: lawyerProfile } = await getSupabase()
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', userId)
+      .single();
+
     // Generate invite token and store in database
     const { token, expiresAt } = await authService.generateCaseInvite(
       id,
       userId,
       invitedEmail
     );
+
+    // Send invite email via Resend
+    const inviteLink = `https://lawyerbuddy-production.up.railway.app/invite/${token}`;
+    const resendApiKey = process.env.RESEND_API_KEY;
+
+    if (resendApiKey) {
+      try {
+        const resend = new Resend(resendApiKey);
+        await resend.emails.send({
+          from: 'invites@lawyerbuddy.io',
+          to: invitedEmail,
+          subject: `You're invited to a case on LawyerBuddy`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>You're invited to a legal case on LawyerBuddy</h2>
+              <p>Hi,</p>
+              <p><strong>${lawyerProfile?.full_name || 'A lawyer'}</strong> has invited you to collaborate on the following case:</p>
+              <p style="background-color: #f5f5f5; padding: 16px; border-radius: 8px;">
+                <strong>Case:</strong> ${caseData.title || 'Untitled Case'}
+              </p>
+              <p>Click the button below to accept the invitation and get started:</p>
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${inviteLink}" style="background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                  Accept Invitation
+                </a>
+              </div>
+              <p style="color: #888888; font-size: 12px;">
+                This invitation link expires in 7 days. If the button doesn't work, copy and paste this link in your browser: ${inviteLink}
+              </p>
+              <p style="color: #888888; font-size: 12px;">LawyerBuddy - Your legal case management partner</p>
+            </div>
+          `,
+        });
+        console.log('✅ Invite email sent to:', invitedEmail);
+      } catch (emailError: any) {
+        console.error('⚠️ Failed to send invite email:', emailError.message);
+        // Don't fail the request if email sending fails - token is still generated
+      }
+    }
 
     // Log invite generation for audit trail
     await auditLog.logInviteGenerate(userId, id, invitedEmail);

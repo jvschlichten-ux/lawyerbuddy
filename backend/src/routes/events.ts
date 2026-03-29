@@ -373,4 +373,62 @@ router.post(
   }
 );
 
+/**
+ * DELETE /events/:eventId
+ * Delete an event (court date or incident log)
+ * Only event creator can delete
+ * Requires authentication
+ *
+ * Response:
+ * - success: true on successful deletion
+ */
+router.delete('/:eventId', verifyJWT, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const { eventId } = req.params;
+
+    // Verify event exists and get event details
+    const { data: event, error: fetchError } = await getSupabase()
+      .from('events')
+      .select('client_id, case_id')
+      .eq('id', eventId)
+      .single();
+
+    if (fetchError || !event) {
+      return res.status(404).json({
+        error: 'Event not found',
+      });
+    }
+
+    // Verify user is the event creator (client_id)
+    if (event.client_id !== userId) {
+      return res.status(403).json({
+        error: 'Only the event creator can delete this event',
+      });
+    }
+
+    // Delete the event
+    const { error: deleteError } = await getSupabase()
+      .from('events')
+      .delete()
+      .eq('id', eventId);
+
+    if (deleteError) {
+      throw new Error(`Event deletion failed: ${deleteError.message}`);
+    }
+
+    // Log deletion for audit trail
+    await auditLog.logEventDelete(userId, eventId, event.case_id);
+
+    res.json({
+      success: true,
+      message: 'Event deleted successfully',
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      error: error.message || 'Event deletion failed',
+    });
+  }
+});
+
 export default router;

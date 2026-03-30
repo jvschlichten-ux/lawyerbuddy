@@ -27,6 +27,172 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', phase: 'Phase 10 - Real-time + Notifications' });
 });
 
+// Invite redirect route - handles deep linking for invite acceptance
+// Redirects to lawyerbuddy://invite/{token} and shows fallback HTML if deep link doesn't work
+app.get('/invite/:token', (req, res) => {
+  const { token } = req.params;
+
+  if (!token) {
+    return res.status(400).json({ error: 'Invite token is required' });
+  }
+
+  const deepLink = `lawyerbuddy://invite/${token}`;
+
+  // Return HTML page that attempts to open the deep link
+  // The page will redirect to the deep link, and if that fails, show a fallback button
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>LawyerBuddy - Case Invitation</title>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+          background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #ffffff;
+        }
+
+        .container {
+          text-align: center;
+          padding: 32px;
+          max-width: 400px;
+        }
+
+        .logo {
+          font-size: 64px;
+          margin-bottom: 24px;
+        }
+
+        h1 {
+          font-size: 28px;
+          font-weight: 700;
+          margin-bottom: 12px;
+        }
+
+        .message {
+          font-size: 16px;
+          color: #888888;
+          margin-bottom: 32px;
+          line-height: 24px;
+        }
+
+        .button {
+          background-color: #0066cc;
+          color: #ffffff;
+          border: none;
+          padding: 14px 32px;
+          font-size: 16px;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
+          text-decoration: none;
+          display: inline-block;
+          margin: 8px;
+          transition: background-color 0.2s;
+        }
+
+        .button:hover {
+          background-color: #0052a3;
+        }
+
+        .instructions {
+          font-size: 12px;
+          color: #666666;
+          margin-top: 24px;
+          padding-top: 24px;
+          border-top: 1px solid #1a1a1a;
+        }
+
+        .spinner {
+          display: inline-block;
+          width: 20px;
+          height: 20px;
+          border: 3px solid #0066cc;
+          border-radius: 50%;
+          border-top-color: transparent;
+          animation: spin 0.8s linear infinite;
+          margin-right: 8px;
+          vertical-align: middle;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="logo">⚖️</div>
+        <h1>Case Invitation</h1>
+        <div class="message" id="message">
+          <span class="spinner"></span>Opening LawyerBuddy app...
+        </div>
+
+        <button class="button" id="fallbackButton" style="display: none;" onclick="openDeepLink()">
+          Open LawyerBuddy App
+        </button>
+
+        <div class="instructions">
+          If the app doesn't open automatically, click the button above.<br/>
+          Make sure LawyerBuddy is installed on your device.
+        </div>
+      </div>
+
+      <script>
+        const deepLink = '${deepLink}';
+        let deepLinkAttempted = false;
+
+        // Try to open the deep link
+        function openDeepLink() {
+          deepLinkAttempted = true;
+          window.location.href = deepLink;
+
+          // Show fallback button after 2 seconds if app didn't open
+          setTimeout(() => {
+            if (!document.hidden) {
+              document.getElementById('fallbackButton').style.display = 'inline-block';
+              document.getElementById('message').innerHTML =
+                'The app didn\'t open. Try clicking the button above or install LawyerBuddy.';
+            }
+          }, 2000);
+        }
+
+        // Attempt to open deep link on page load
+        document.addEventListener('DOMContentLoaded', () => {
+          openDeepLink();
+        });
+
+        // Handle app switching - if user returns to this page, show fallback
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden && deepLinkAttempted) {
+            document.getElementById('fallbackButton').style.display = 'inline-block';
+            document.getElementById('message').innerHTML =
+              'If you have LawyerBuddy installed, it should open. Otherwise, install it first.';
+          }
+        });
+      </script>
+    </body>
+    </html>
+  `;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
 // Admin migration endpoint - execute pending migrations via Supabase
 app.post('/admin/migrate', async (req, res) => {
   try {

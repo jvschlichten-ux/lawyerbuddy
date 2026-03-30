@@ -2357,29 +2357,43 @@ export default function App() {
 
   // Deep Link Handler for Invites
   useEffect(() => {
+    console.log('🔗 Setting up deep link listeners...');
+
     // Handle deep link when app is already running
     const subscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('🔗 Deep link received:', url);
+      console.log('🔗 Deep link received (app running):', url);
+      console.log('   Raw URL:', JSON.stringify(url));
       const token = parseInviteToken(url);
       if (token) {
-        console.log('✅ Invite token extracted:', token);
+        console.log('✅ Invite token extracted from running app:', token);
         setCurrentInviteToken(token);
+      } else {
+        console.warn('⚠️ Could not extract token from deep link:', url);
       }
     });
 
     // Check for deep link when app launches
     Linking.getInitialURL().then((url) => {
+      console.log('🚀 App launched, checking initial URL:', url);
       if (url != null) {
-        console.log('🔗 Initial deep link:', url);
+        console.log('🔗 Initial deep link found:', url);
+        console.log('   Raw URL:', JSON.stringify(url));
         const token = parseInviteToken(url);
         if (token) {
           console.log('✅ Initial invite token extracted:', token);
           setCurrentInviteToken(token);
+        } else {
+          console.warn('⚠️ Could not extract token from initial deep link:', url);
         }
+      } else {
+        console.log('ℹ️ No initial deep link (normal app launch)');
       }
+    }).catch((err) => {
+      console.error('❌ Error getting initial URL:', err);
     });
 
     return () => {
+      console.log('🔗 Cleaning up deep link listeners');
       subscription.remove();
     };
   }, []);
@@ -4104,20 +4118,33 @@ function getTimeOfDay(): string {
 function parseInviteToken(url: string): string | null {
   // Parse URLs like: lawyerbuddy://invite/token123
   // or lawyerbuddy://invite?token=token123
+  console.log('🔍 Parsing invite token from URL:', url);
+
   try {
-    const match = url.match(/lawyerbuddy:\/\/invite\/([^?/]+)/);
-    if (match && match[1]) {
-      return match[1];
+    // Method 1: Extract token from path (lawyerbuddy://invite/token123)
+    const pathMatch = url.match(/lawyerbuddy:\/\/invite\/([^?/]+)/);
+    console.log('   Path pattern match result:', pathMatch);
+    if (pathMatch && pathMatch[1]) {
+      console.log('✅ Token extracted from path:', pathMatch[1]);
+      return pathMatch[1];
     }
 
-    // Try to parse as URL parameter
-    const urlObj = new URL(url);
-    const token = urlObj.searchParams.get('token');
-    if (token) {
-      return token;
+    // Method 2: Try to parse as URL parameter (lawyerbuddy://invite?token=token123)
+    try {
+      const urlObj = new URL(url);
+      const token = urlObj.searchParams.get('token');
+      console.log('   URL search params:', { token });
+      if (token) {
+        console.log('✅ Token extracted from query parameter:', token);
+        return token;
+      }
+    } catch (urlErr) {
+      console.log('   URL parsing failed (expected for custom schemes):', urlErr);
     }
+
+    console.warn('⚠️ No token pattern matched in URL:', url);
   } catch (err) {
-    console.warn('Failed to parse invite token from URL:', err);
+    console.error('❌ Error parsing invite token:', err);
   }
 
   return null;

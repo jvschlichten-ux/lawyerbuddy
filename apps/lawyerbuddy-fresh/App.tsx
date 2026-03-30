@@ -1689,21 +1689,6 @@ function ClientPortalScreen({
                 ? 'Tu abogado te enviará una invitación. Revisa tu correo para comenzar.'
                 : 'Your lawyer will send you a case invitation. Check your email to get started.'}
             </Text>
-
-            {/* Logout button */}
-            <TouchableOpacity
-              onPress={onLogout}
-              style={{
-                backgroundColor: '#0066cc',
-                paddingVertical: 12,
-                paddingHorizontal: 32,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600' }}>
-                {t('logout')}
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </SafeAreaView>

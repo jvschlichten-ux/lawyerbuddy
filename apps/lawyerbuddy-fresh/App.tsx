@@ -3593,9 +3593,11 @@ export default function App() {
 
   // Client Portal Screen
   if (success && userData && userData.role === 'client') {
+    // Filter to only show active cases (exclude archived/deleted)
+    const activeCases = cases.filter((caseItem) => caseItem.status === 'active');
     return (
       <ClientPortalScreen
-        caseData={cases.length > 0 ? cases[0] : null}
+        caseData={activeCases.length > 0 ? activeCases[0] : null}
         userToken={userToken}
         onLogout={handleLogout}
         styles={styles}

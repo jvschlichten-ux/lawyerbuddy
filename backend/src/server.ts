@@ -142,9 +142,13 @@ app.get('/invite/:token', (req, res) => {
           <span class="spinner"></span>Opening LawyerBuddy app...
         </div>
 
-        <button class="button" id="fallbackButton" style="display: none;" onclick="openDeepLink()">
+        <!-- Hidden anchor tag for deep link (more reliable) -->
+        <a id="deeplink" href="${deepLink}" style="display: none;">Open LawyerBuddy</a>
+
+        <!-- Fallback button for manual tap -->
+        <a href="${deepLink}" class="button" id="fallbackButton" style="display: none;">
           Open LawyerBuddy App
-        </button>
+        </a>
 
         <div class="instructions">
           If the app doesn't open automatically, click the button above.<br/>
@@ -156,14 +160,28 @@ app.get('/invite/:token', (req, res) => {
         const deepLink = '${deepLink}';
         let deepLinkAttempted = false;
 
-        // Try to open the deep link
+        // Try to open the deep link using anchor tag (more reliable for iOS Safari)
         function openDeepLink() {
           deepLinkAttempted = true;
-          window.location.href = deepLink;
+          console.log('🔗 Attempting to open deep link:', deepLink);
+
+          // Method 1: Click the hidden anchor tag (most reliable for iOS)
+          const anchorElement = document.getElementById('deeplink');
+          if (anchorElement) {
+            console.log('📱 Using anchor tag method');
+            anchorElement.click();
+          }
+
+          // Method 2: Also try window.location.href as fallback
+          setTimeout(() => {
+            console.log('📍 Using window.location.href fallback');
+            window.location.href = deepLink;
+          }, 100);
 
           // Show fallback button after 2 seconds if app didn't open
           setTimeout(() => {
             if (!document.hidden) {
+              console.log('⏱️ App didn\'t open, showing fallback button');
               document.getElementById('fallbackButton').style.display = 'inline-block';
               document.getElementById('message').innerHTML =
                 'The app didn\'t open. Try clicking the button above or install LawyerBuddy.';
@@ -173,12 +191,18 @@ app.get('/invite/:token', (req, res) => {
 
         // Attempt to open deep link on page load
         document.addEventListener('DOMContentLoaded', () => {
+          console.log('📄 Page loaded, initiating deep link');
           openDeepLink();
         });
+
+        // Also try immediately on script execution (faster)
+        console.log('🚀 Script executing, deep link:', deepLink);
+        openDeepLink();
 
         // Handle app switching - if user returns to this page, show fallback
         document.addEventListener('visibilitychange', () => {
           if (!document.hidden && deepLinkAttempted) {
+            console.log('👁️ Page became visible again');
             document.getElementById('fallbackButton').style.display = 'inline-block';
             document.getElementById('message').innerHTML =
               'If you have LawyerBuddy installed, it should open. Otherwise, install it first.';

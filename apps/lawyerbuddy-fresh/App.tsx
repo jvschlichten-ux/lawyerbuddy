@@ -1577,6 +1577,7 @@ function ClientPortalScreen({
 }) {
   const [checklistItems, setChecklistItems] = useState<any[]>([]);
   const [loadingChecklist, setLoadingChecklist] = useState(true);
+  const [completingItemId, setCompletingItemId] = useState<string | null>(null);
 
   // Load checklist when case is selected
   useEffect(() => {
@@ -1609,19 +1610,103 @@ function ClientPortalScreen({
     loadChecklist();
   }, [caseData?.id, userToken]);
 
+  // Handle client marking checklist item as complete
+  const toggleChecklistItem = async (itemId: string, isCurrentlyComplete: boolean) => {
+    if (!caseData?.id || !userToken) return;
+
+    setCompletingItemId(itemId);
+    try {
+      const response = await fetch(
+        `https://lawyerbuddy-production.up.railway.app/cases/${caseData.id}/checklist/${itemId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            is_complete: !isCurrentlyComplete,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update local state
+        setChecklistItems(checklistItems.map(item =>
+          item.id === itemId ? { ...item, is_complete: !isCurrentlyComplete } : item
+        ));
+      }
+    } catch (err: any) {
+      console.error('Error updating checklist item:', err);
+      Alert.alert('Error', 'Could not update checklist item. Please try again.');
+    } finally {
+      setCompletingItemId(null);
+    }
+  };
+
+  // Empty state when no case assigned
   if (!caseData) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{t('myCases')}</Text>
-          <TouchableOpacity onPress={onLogout}>
-            <Text style={styles.logoutButton}>{t('logout')}</Text>
-          </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
+          {/* Header with logout */}
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingVertical: 12 }}>
+            <TouchableOpacity onPress={onLogout}>
+              <Text style={styles.logoutButton}>{t('logout')}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Empty state content */}
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+            {/* Logo / Icon */}
+            <Text style={{ fontSize: 60, marginBottom: 24 }}>⚖️</Text>
+
+            {/* Welcome message */}
+            <Text
+              style={{
+                fontSize: 28,
+                fontWeight: '700',
+                color: '#ffffff',
+                marginBottom: 12,
+                textAlign: 'center',
+              }}
+            >
+              {AppState.language === 'es' ? 'Bienvenido a LawyerBuddy' : 'Welcome to LawyerBuddy'}
+            </Text>
+
+            {/* Subtext */}
+            <Text
+              style={{
+                fontSize: 14,
+                color: '#888888',
+                textAlign: 'center',
+                marginBottom: 32,
+                lineHeight: 20,
+              }}
+            >
+              {AppState.language === 'es'
+                ? 'Tu abogado te enviará una invitación. Revisa tu correo para comenzar.'
+                : 'Your lawyer will send you a case invitation. Check your email to get started.'}
+            </Text>
+
+            {/* Logout button */}
+            <TouchableOpacity
+              onPress={onLogout}
+              style={{
+                backgroundColor: '#0066cc',
+                paddingVertical: 12,
+                paddingHorizontal: 32,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600' }}>
+                {t('logout')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#888888', fontSize: 16 }}>{t('noCase')}</Text>
-        </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -1675,9 +1760,11 @@ function ClientPortalScreen({
             </View>
           </View>
 
-          {/* Checklist */}
+          {/* Checklist - Client can tap to mark complete */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Checklist</Text>
+            <Text style={styles.sectionTitle}>
+              {AppState.language === 'es' ? 'Tu lista de tareas' : 'Your Checklist'}
+            </Text>
 
             {loadingChecklist ? (
               <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -1685,12 +1772,15 @@ function ClientPortalScreen({
               </View>
             ) : checklistItems.length === 0 ? (
               <Text style={{ color: '#888888', marginLeft: 16, marginTop: 8 }}>
-                No items yet
+                {AppState.language === 'es' ? 'Sin elementos aún' : 'No items yet'}
               </Text>
             ) : (
               checklistItems.map((item) => (
-                <View
+                <TouchableOpacity
                   key={item.id}
+                  onPress={() => toggleChecklistItem(item.id, item.is_complete)}
+                  disabled={completingItemId === item.id}
+                  activeOpacity={0.7}
                   style={{
                     flexDirection: 'row',
                     paddingVertical: 12,
@@ -1698,6 +1788,7 @@ function ClientPortalScreen({
                     alignItems: 'center',
                     borderBottomWidth: 1,
                     borderBottomColor: '#1a1a1a',
+                    backgroundColor: completingItemId === item.id ? '#0a0a0a' : 'transparent',
                   }}
                 >
                   <View
@@ -1724,7 +1815,8 @@ function ClientPortalScreen({
                   >
                     {item.label}
                   </Text>
-                </View>
+                  {completingItemId === item.id && <ActivityIndicator color="#0066cc" size="small" />}
+                </TouchableOpacity>
               ))
             )}
           </View>
@@ -2607,14 +2699,34 @@ export default function App() {
   };
 
   const uploadDocument = async (caseId: string) => {
+    console.log('🚀 uploadDocument called for caseId:', caseId);
+
     if (!userToken) {
+      console.error('❌ No userToken available');
       Alert.alert('Error', 'Not authenticated. Please log in again.');
       return;
     }
 
+    console.log('✅ userToken present (length:', userToken.length, 'chars)');
+
     // Check if native modules are available (they're not in dev client)
     if (!DocumentPicker || !FileSystem) {
+      console.error('❌ Native modules unavailable - DocumentPicker:', !!DocumentPicker, 'FileSystem:', !!FileSystem);
       Alert.alert('Not Available', 'Document upload requires a production build. Coming soon!');
+      return;
+    }
+
+    console.log('✅ Native modules available');
+
+    // Verify Supabase configuration
+    console.log('🔍 Supabase config check:');
+    console.log('  - URL:', supabaseUrl);
+    console.log('  - EXPO_PUBLIC_SUPABASE_URL env:', process.env.EXPO_PUBLIC_SUPABASE_URL);
+    console.log('  - EXPO_PUBLIC_SUPABASE_ANON_KEY exists:', !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+
+    if (!supabaseUrl || !supabaseUrl.includes('supabase')) {
+      console.error('❌ Invalid Supabase URL:', supabaseUrl);
+      Alert.alert('Config Error', 'Supabase URL not configured properly. Check environment variables.');
       return;
     }
 
@@ -2622,6 +2734,7 @@ export default function App() {
       setUploadingDocument(true);
 
       // Pick a document
+      console.log('📂 Opening document picker...');
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
       });
@@ -2629,13 +2742,13 @@ export default function App() {
       console.log('📄 DocumentPicker result:', JSON.stringify(result, null, 2));
 
       if (result.canceled) {
-        console.log('⚠️ Document selection cancelled');
+        console.log('⚠️ Document selection cancelled by user');
         setUploadingDocument(false);
         return;
       }
 
       const file = result.assets[0];
-      console.log('📄 Selected file:', {
+      console.log('📄 Selected file details:', {
         name: file.name,
         size: file.size,
         mimeType: file.mimeType,
@@ -2643,15 +2756,22 @@ export default function App() {
       });
 
       // Read file as base64
+      console.log('📖 Reading file as base64...');
       let fileContent: string;
       try {
         fileContent = await FileSystem.readAsStringAsync(file.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        console.log('✅ File read successfully, size:', fileContent.length);
-      } catch (readError) {
-        console.error('❌ Error reading file:', readError);
-        Alert.alert('Error', 'Could not read file. Please try again.');
+        console.log('✅ File read successfully');
+        console.log('  - Base64 content length:', fileContent.length);
+        console.log('  - First 50 chars:', fileContent.substring(0, 50));
+      } catch (readError: any) {
+        console.error('❌ Error reading file:', {
+          message: readError.message,
+          code: readError.code,
+          stack: readError.stack,
+        });
+        Alert.alert('File Read Error', `Could not read file: ${readError.message}`);
         setUploadingDocument(false);
         return;
       }
@@ -2659,34 +2779,67 @@ export default function App() {
       // Generate unique filename with timestamp
       const timestamp = Date.now();
       const fileName = `${caseId}/${timestamp}_${file.name}`;
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/case-files/${fileName}`;
 
-      // Upload to Supabase Storage with proper headers for base64
-      console.log('📤 Uploading to Supabase Storage:', fileName);
+      console.log('📤 Preparing to upload to Supabase Storage');
+      console.log('  - Upload URL:', uploadUrl);
+      console.log('  - File path in bucket:', fileName);
+      console.log('  - Token length:', userToken.length);
 
-      const uploadResponse = await fetch(
-        `${supabaseUrl}/storage/v1/object/case-files/${fileName}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${userToken}`,
-            'Content-Type': 'application/octet-stream',
-            'x-upsert': 'false',
-          },
-          body: Buffer.from(fileContent, 'base64'),
+      // Convert base64 to binary for upload
+      console.log('🔄 Converting base64 to binary...');
+      let binaryBody: any;
+      try {
+        // Try using Uint8Array instead of Buffer for React Native compatibility
+        const binaryString = atob(fileContent);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
         }
-      );
+        binaryBody = bytes;
+        console.log('✅ Binary conversion successful (Uint8Array size:', bytes.length, 'bytes)');
+      } catch (conversionError: any) {
+        console.error('⚠️ Binary conversion failed, falling back to base64 body:', conversionError.message);
+        // Fallback: send base64 directly
+        binaryBody = fileContent;
+      }
+
+      console.log('🌐 Sending POST request to Supabase...');
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          'Content-Type': 'application/octet-stream',
+          'x-upsert': 'false',
+        },
+        body: binaryBody,
+      });
+
+      console.log('📬 Response received:', {
+        status: uploadResponse.status,
+        statusText: uploadResponse.statusText,
+        headers: Object.fromEntries(uploadResponse.headers.entries() || []),
+      });
 
       if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        console.error('❌ Upload failed:', uploadResponse.status, errorText);
-        Alert.alert('Upload Error', `Failed to upload file: ${uploadResponse.status}`);
+        let errorText = '';
+        try {
+          errorText = await uploadResponse.text();
+        } catch {
+          errorText = 'Could not read error response';
+        }
+        console.error('❌ Upload failed with status', uploadResponse.status, ':', errorText);
+        Alert.alert(
+          'Upload Error',
+          `HTTP ${uploadResponse.status}: ${errorText || uploadResponse.statusText}`
+        );
         setUploadingDocument(false);
         return;
       }
 
-      console.log('✅ File uploaded to storage');
+      console.log('✅ File uploaded to Supabase Storage successfully');
 
-      // Save metadata to database via API
+      // Save metadata to local state
       const documentMetadata = {
         caseId,
         fileName: file.name,
@@ -2701,7 +2854,7 @@ export default function App() {
         signedAt: null,
       };
 
-      console.log('📋 Saving document metadata:', documentMetadata);
+      console.log('📋 Document metadata:', documentMetadata);
 
       // Add to local documents list
       const newDoc = {
@@ -2711,15 +2864,20 @@ export default function App() {
       };
 
       setDocuments([...documents, newDoc]);
+      console.log('✅ Document added to local state');
 
-      console.log('✅ Document uploaded and metadata saved');
+      console.log('✅ Upload process complete');
       setUploadingDocument(false);
       setRequiresSignature(false);
 
       Alert.alert('Success', 'Document uploaded successfully!');
     } catch (error: any) {
-      console.error('❌ Error uploading document:', error);
-      Alert.alert('Error', 'Failed to upload document: ' + error.message);
+      console.error('❌ Unexpected error during upload:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
+      Alert.alert('Upload Failed', `Error: ${error.message || 'Unknown error occurred'}`);
       setUploadingDocument(false);
     }
   };

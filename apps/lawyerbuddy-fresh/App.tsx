@@ -652,10 +652,28 @@ function CaseDetailScreen({
   // Message Settings State
   const [messagesEnabled, setMessagesEnabled] = useState(true);
 
+  // Message Multi-select State
+  const [messageSelectionMode, setMessageSelectionMode] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+
   // Month names
   const monthNames = AppState.language === 'es'
     ? ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
     : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Delete multiple messages function
+  const deleteMultipleMessages = async () => {
+    const deletePromises = Array.from(selectedMessages).map(async (msgId) => {
+      return fetch(`https://lawyerbuddy-production.up.railway.app/messages/${msgId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${userToken}` }
+      });
+    });
+    await Promise.all(deletePromises);
+    setMessages(prev => prev.filter(m => !selectedMessages.has(m.id)));
+    setSelectedMessages(new Set());
+    setMessageSelectionMode(false);
+  };
 
   // Load message settings from AsyncStorage
   useEffect(() => {
@@ -1076,66 +1094,124 @@ function CaseDetailScreen({
             messages.map((msg: any) => {
               try {
                 const decodedContent = msg.content_encrypted ? atob(msg.content_encrypted) : msg.content || '';
+                const isSelected = selectedMessages.has(msg.id);
                 return (
                   <TouchableOpacity
                     key={msg.id}
-                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}
+                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333', flexDirection: 'row', alignItems: 'center', gap: 12 }}
                     onLongPress={() => {
-                      Alert.alert(t('delete'), 'Delete this message?', [
-                        { text: t('cancel'), style: 'cancel' },
-                        {
-                          text: t('delete'),
-                          onPress: () => deleteMessage(msg.id),
-                          style: 'destructive',
-                        },
-                      ]);
+                      if (!messageSelectionMode) {
+                        setMessageSelectionMode(true);
+                        setSelectedMessages(new Set([msg.id]));
+                      }
+                    }}
+                    onPress={() => {
+                      if (messageSelectionMode) {
+                        const newSelected = new Set(selectedMessages);
+                        if (newSelected.has(msg.id)) {
+                          newSelected.delete(msg.id);
+                        } else {
+                          newSelected.add(msg.id);
+                        }
+                        setSelectedMessages(newSelected);
+                      }
                     }}
                   >
-                    <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
-                    <Text style={{ color: '#ffffff', marginTop: 4 }}>{decodedContent}</Text>
+                    {messageSelectionMode && (
+                      <View style={{ width: 24, height: 24, borderRadius: 4, borderWidth: 2, borderColor: '#0066cc', backgroundColor: isSelected ? '#0066cc' : 'transparent', justifyContent: 'center', alignItems: 'center' }}>
+                        {isSelected && <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
+                      <Text style={{ color: '#ffffff', marginTop: 4 }}>{decodedContent}</Text>
+                    </View>
                   </TouchableOpacity>
                 );
               } catch (e) {
+                const isSelected = selectedMessages.has(msg.id);
                 return (
                   <TouchableOpacity
                     key={msg.id}
-                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333' }}
+                    style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#333333', flexDirection: 'row', alignItems: 'center', gap: 12 }}
                     onLongPress={() => {
-                      Alert.alert(t('delete'), 'Delete this message?', [
-                        { text: t('cancel'), style: 'cancel' },
-                        {
-                          text: t('delete'),
-                          onPress: () => deleteMessage(msg.id),
-                          style: 'destructive',
-                        },
-                      ]);
+                      if (!messageSelectionMode) {
+                        setMessageSelectionMode(true);
+                        setSelectedMessages(new Set([msg.id]));
+                      }
+                    }}
+                    onPress={() => {
+                      if (messageSelectionMode) {
+                        const newSelected = new Set(selectedMessages);
+                        if (newSelected.has(msg.id)) {
+                          newSelected.delete(msg.id);
+                        } else {
+                          newSelected.add(msg.id);
+                        }
+                        setSelectedMessages(newSelected);
+                      }
                     }}
                   >
-                    <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
-                    <Text style={{ color: '#ff4444' }}>[Error decoding message]</Text>
+                    {messageSelectionMode && (
+                      <View style={{ width: 24, height: 24, borderRadius: 4, borderWidth: 2, borderColor: '#0066cc', backgroundColor: isSelected ? '#0066cc' : 'transparent', justifyContent: 'center', alignItems: 'center' }}>
+                        {isSelected && <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#888888', fontSize: 12 }}>{new Date(msg.created_at).toLocaleDateString()}</Text>
+                      <Text style={{ color: '#ff4444' }}>[Error decoding message]</Text>
+                    </View>
                   </TouchableOpacity>
                 );
               }
             })
           )}
 
-          {messagesEnabled ? (
-            <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', gap: 8 }}>
-              <TextInput
-                style={{ flex: 1, borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', backgroundColor: '#0a0a0a' }}
-                placeholder={t('typeMessage')}
-                placeholderTextColor="#666666"
-                value={newMessage}
-                onChangeText={setNewMessage}
-                multiline
-              />
+          {messageSelectionMode && (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#333333', paddingHorizontal: 12, paddingVertical: 12, flexDirection: 'row', gap: 8, justifyContent: 'space-between' }}>
               <TouchableOpacity
-                style={{ backgroundColor: '#0066cc', paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center' }}
-                onPress={() => sendMessage(caseData?.id)}
-                disabled={!!messagesSendingId}
+                style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#555555', justifyContent: 'center', alignItems: 'center' }}
+                onPress={() => {
+                  setMessageSelectionMode(false);
+                  setSelectedMessages(new Set());
+                }}
               >
-                <Text style={{ color: '#ffffff', fontWeight: '600' }}>{t('sendMessage')}</Text>
+                <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 13 }}>{t('cancel')}</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#ff4444', justifyContent: 'center', alignItems: 'center' }}
+                onPress={() => deleteMultipleMessages()}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 13 }}>Delete ({selectedMessages.size})</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {messagesEnabled ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#333333', paddingHorizontal: 12, paddingVertical: 8 }}>
+              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                  <TextInput
+                    style={{ flex: 1, borderWidth: 1, borderColor: '#333333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, color: '#ffffff', backgroundColor: '#1a1a1a', maxHeight: 100, fontSize: 14 }}
+                    placeholder={t('typeMessage')}
+                    placeholderTextColor='#666666'
+                    value={newMessage}
+                    onChangeText={setNewMessage}
+                    multiline={true}
+                    maxLength={500}
+                  />
+                  <TouchableOpacity
+                    style={{ width: 70, height: 40, borderRadius: 8, backgroundColor: '#0066cc', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}
+                    onPress={() => {
+                      sendMessage(caseData?.id);
+                      setNewMessage('');
+                    }}
+                    disabled={!!messagesSendingId}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 13 }}>{t('send')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </KeyboardAvoidingView>
             </View>
           ) : (
             <View style={{ paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#1a1a1a', borderRadius: 8, marginHorizontal: 16, marginBottom: 8 }}>
@@ -4004,105 +4080,111 @@ export default function App() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoInitials}>LB</Text>
-          </View>
-          <Text style={styles.logoText}>{t('lawyerBuddy')}</Text>
-          <Text style={styles.tagline}>{t('tuAbogado')}</Text>
-        </View>
-
-        {/* Form */}
-        <View style={styles.formContainer}>
-          {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t('email')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('email')}
-              placeholderTextColor="#666666"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!loading}
-            />
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoInitials}>LB</Text>
+            </View>
+            <Text style={styles.logoText}>{t('lawyerBuddy')}</Text>
+            <Text style={styles.tagline}>{t('tuAbogado')}</Text>
           </View>
 
-          {/* Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t('password')}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+          {/* Form */}
+          <View style={styles.formContainer}>
+            {/* Email Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('email')}</Text>
               <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder={t('password')}
+                style={styles.input}
+                placeholder={t('email')}
                 placeholderTextColor="#666666"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
                 editable={!loading}
-                textContentType="oneTimeCode"
-                autoComplete="off"
               />
+            </View>
+
+            {/* Password Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('password')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder={t('password')}
+                  placeholderTextColor="#666666"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  editable={!loading}
+                  textContentType="oneTimeCode"
+                  autoComplete="off"
+                />
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    padding: 8,
+                  }}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Text style={{ fontSize: 18 }}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Remember Email Checkbox */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 20 }}>
               <TouchableOpacity
                 style={{
-                  position: 'absolute',
-                  right: 12,
-                  padding: 8,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 4,
+                  borderWidth: 2,
+                  borderColor: '#0066cc',
+                  backgroundColor: rememberEmail ? '#0066cc' : 'transparent',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 8,
                 }}
-                onPress={() => setShowPassword(!showPassword)}
+                onPress={() => setRememberEmail(!rememberEmail)}
               >
-                <Text style={{ fontSize: 18 }}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                {rememberEmail && <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
               </TouchableOpacity>
+              <Text style={{ color: '#888888', fontSize: 14 }}>Save email for next time</Text>
             </View>
-          </View>
 
-          {/* Remember Email Checkbox */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+            {/* Error Message */}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            {/* Login Button */}
             <TouchableOpacity
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                borderWidth: 2,
-                borderColor: '#0066cc',
-                backgroundColor: rememberEmail ? '#0066cc' : 'transparent',
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginRight: 8,
-              }}
-              onPress={() => setRememberEmail(!rememberEmail)}
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
             >
-              {rememberEmail && <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
+              {loading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.loginButtonText}>{t('login')}</Text>
+              )}
             </TouchableOpacity>
-            <Text style={{ color: '#888888', fontSize: 14 }}>Save email for next time</Text>
           </View>
 
-          {/* Error Message */}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          {/* Login Button */}
-          <TouchableOpacity
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.loginButtonText}>{t('login')}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Sign Up Link */}
-        <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>{t('dontHaveAccount')} </Text>
-          <TouchableOpacity>
-            <Text style={styles.signupLink}>{t('signUp')}</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Sign Up Link */}
+          <View style={styles.signupContainer}>
+            <Text style={styles.signupText}>{t('dontHaveAccount')} </Text>
+            <TouchableOpacity>
+              <Text style={styles.signupLink}>{t('signUp')}</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );

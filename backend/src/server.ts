@@ -9,6 +9,8 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 // Now import other modules
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
 import caseRoutes from './routes/cases';
 import eventRoutes from './routes/events';
@@ -18,9 +20,38 @@ import messageRoutes from './routes/messages';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// Middleware - Security
+app.use(helmet());
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:8081'],
+  credentials: true
+}));
 app.use(express.json());
+
+// Rate Limiters
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts
+  message: 'Too many login attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const inviteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 invites
+  message: 'Too many invites sent, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests
+  message: 'Too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -259,7 +290,13 @@ app.post('/admin/migrate', async (req, res) => {
   }
 });
 
-// Routes
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
+
+// Routes with specific rate limiters
+app.post('/auth/login', loginLimiter);
+app.post('/auth/invite/send', inviteLimiter);
+
 app.use('/auth', authRoutes);
 app.use('/cases', caseRoutes);
 app.use('/events', eventRoutes);

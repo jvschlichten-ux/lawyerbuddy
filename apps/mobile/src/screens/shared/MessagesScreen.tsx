@@ -228,51 +228,54 @@ const MessagesScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Messages */}
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.messagesContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {messages.length === 0 ? (
-            <Text style={styles.emptyText}>{t('no_messages_yet')}</Text>
-          ) : (
-            messages.map((message) => renderMessage(message))
-          )}
-        </ScrollView>
-      )}
-
-      {/* Input */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.inputContainer}
+        style={styles.keyboardAvoidingView}
       >
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder={t('type_message')}
-            value={newMessage}
-            onChangeText={setNewMessage}
-            editable={!isSending}
-            maxLength={500}
-            multiline
-            placeholderTextColor="#999"
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
-            onPress={handleSendMessage}
-            disabled={!newMessage.trim() || isSending}
+        {/* Messages */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.messagesContainer}
+            showsVerticalScrollIndicator={false}
           >
-            {isSending ? (
-              <ActivityIndicator color="#fff" size="small" />
+            {messages.length === 0 ? (
+              <Text style={styles.emptyText}>{t('no_messages_yet')}</Text>
             ) : (
-              <Text style={styles.sendButtonText}>📤</Text>
+              messages.map((message) => renderMessage(message))
             )}
-          </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {/* Input */}
+        <View style={styles.inputContainer}>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder={t('type_message')}
+              value={newMessage}
+              onChangeText={setNewMessage}
+              editable={!isSending}
+              maxLength={500}
+              multiline={true}
+              maxHeight={100}
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
+              onPress={handleSendMessage}
+              disabled={!newMessage.trim() || isSending}
+            >
+              {isSending ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.sendButtonText}>📤</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -348,6 +351,9 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
     lineHeight: 14,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   messagesContainer: {
     flex: 1,
@@ -448,12 +454,13 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendButton: {
-    width: 40,
+    width: 80,
     height: 40,
     borderRadius: 6,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   sendButtonDisabled: {
     opacity: 0.5,

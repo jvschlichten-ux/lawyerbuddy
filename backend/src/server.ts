@@ -20,6 +20,9 @@ import messageRoutes from './routes/messages';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy (Railway uses reverse proxy - needed for rate limiting and real client IPs)
+app.set('trust proxy', 1);
+
 // Middleware - Security
 app.use(helmet());
 app.use(cors({

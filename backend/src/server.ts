@@ -68,9 +68,9 @@ app.get('/invite/:token', (req, res) => {
   }
 
   const deepLink = `lawyerbuddy://invite/${token}`;
+  const testflightLink = 'https://testflight.apple.com/join/YOUR_TESTFLIGHT_CODE'; // Update with actual TestFlight link
 
-  // Return HTML page that attempts to open the deep link
-  // The page will redirect to the deep link, and if that fails, show a fallback button
+  // Return HTML page with prominent button (requires user gesture for iOS Safari)
   const html = `
     <!DOCTYPE html>
     <html lang="en">
@@ -93,12 +93,13 @@ app.get('/invite/:token', (req, res) => {
           align-items: center;
           justify-content: center;
           color: #ffffff;
+          padding: 16px;
         }
 
         .container {
           text-align: center;
-          padding: 32px;
           max-width: 400px;
+          width: 100%;
         }
 
         .logo {
@@ -109,59 +110,68 @@ app.get('/invite/:token', (req, res) => {
         h1 {
           font-size: 28px;
           font-weight: 700;
-          margin-bottom: 12px;
+          margin-bottom: 16px;
         }
 
-        .message {
+        .instructions {
           font-size: 16px;
           color: #888888;
           margin-bottom: 32px;
           line-height: 24px;
         }
 
-        .button {
+        .primary-button {
           background-color: #0066cc;
           color: #ffffff;
           border: none;
-          padding: 14px 32px;
+          padding: 16px 32px;
+          font-size: 18px;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
+          text-decoration: none;
+          display: inline-block;
+          width: 100%;
+          box-sizing: border-box;
+          margin-bottom: 16px;
+          transition: background-color 0.2s;
+        }
+
+        .primary-button:active {
+          background-color: #0052a3;
+        }
+
+        .secondary-button {
+          background-color: transparent;
+          color: #0066cc;
+          border: 2px solid #0066cc;
+          padding: 14px 30px;
           font-size: 16px;
           font-weight: 600;
           border-radius: 8px;
           cursor: pointer;
           text-decoration: none;
           display: inline-block;
-          margin: 8px;
+          width: 100%;
+          box-sizing: border-box;
           transition: background-color 0.2s;
         }
 
-        .button:hover {
-          background-color: #0052a3;
+        .secondary-button:active {
+          background-color: rgba(0, 102, 204, 0.1);
         }
 
-        .instructions {
+        .divider {
+          margin: 24px 0;
+          color: #444444;
+        }
+
+        .footer {
           font-size: 12px;
           color: #666666;
-          margin-top: 24px;
+          margin-top: 32px;
           padding-top: 24px;
           border-top: 1px solid #1a1a1a;
-        }
-
-        .spinner {
-          display: inline-block;
-          width: 20px;
-          height: 20px;
-          border: 3px solid #0066cc;
-          border-radius: 50%;
-          border-top-color: transparent;
-          animation: spin 0.8s linear infinite;
-          margin-right: 8px;
-          vertical-align: middle;
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
         }
       </style>
     </head>
@@ -169,77 +179,26 @@ app.get('/invite/:token', (req, res) => {
       <div class="container">
         <div class="logo">⚖️</div>
         <h1>Case Invitation</h1>
-        <div class="message" id="message">
-          <span class="spinner"></span>Opening LawyerBuddy app...
-        </div>
-
-        <!-- Hidden anchor tag for deep link (more reliable) -->
-        <a id="deeplink" href="${deepLink}" style="display: none;">Open LawyerBuddy</a>
-
-        <!-- Fallback button for manual tap -->
-        <a href="${deepLink}" class="button" id="fallbackButton" style="display: none;">
-          Open LawyerBuddy App
-        </a>
 
         <div class="instructions">
-          If the app doesn't open automatically, click the button above.<br/>
-          Make sure LawyerBuddy is installed on your device.
+          You've been invited to view a case in LawyerBuddy.<br/>
+          Tap the button below to open the app and view your invitation.
+        </div>
+
+        <a href="${deepLink}" class="primary-button">
+          Open LawyerBuddy
+        </a>
+
+        <div class="divider">or</div>
+
+        <a href="${testflightLink}" class="secondary-button">
+          Download LawyerBuddy
+        </a>
+
+        <div class="footer">
+          If you don't have LawyerBuddy installed, download it from the App Store or join our TestFlight beta.
         </div>
       </div>
-
-      <script>
-        const deepLink = '${deepLink}';
-        let deepLinkAttempted = false;
-
-        // Try to open the deep link using anchor tag (more reliable for iOS Safari)
-        function openDeepLink() {
-          deepLinkAttempted = true;
-          console.log('🔗 Attempting to open deep link:', deepLink);
-
-          // Method 1: Click the hidden anchor tag (most reliable for iOS)
-          const anchorElement = document.getElementById('deeplink');
-          if (anchorElement) {
-            console.log('📱 Using anchor tag method');
-            anchorElement.click();
-          }
-
-          // Method 2: Also try window.location.href as fallback
-          setTimeout(() => {
-            console.log('📍 Using window.location.href fallback');
-            window.location.href = deepLink;
-          }, 100);
-
-          // Show fallback button after 2 seconds if app didn't open
-          setTimeout(() => {
-            if (!document.hidden) {
-              console.log('⏱️ App didn\'t open, showing fallback button');
-              document.getElementById('fallbackButton').style.display = 'inline-block';
-              document.getElementById('message').innerHTML =
-                'The app didn\'t open. Try clicking the button above or install LawyerBuddy.';
-            }
-          }, 2000);
-        }
-
-        // Attempt to open deep link on page load
-        document.addEventListener('DOMContentLoaded', () => {
-          console.log('📄 Page loaded, initiating deep link');
-          openDeepLink();
-        });
-
-        // Also try immediately on script execution (faster)
-        console.log('🚀 Script executing, deep link:', deepLink);
-        openDeepLink();
-
-        // Handle app switching - if user returns to this page, show fallback
-        document.addEventListener('visibilitychange', () => {
-          if (!document.hidden && deepLinkAttempted) {
-            console.log('👁️ Page became visible again');
-            document.getElementById('fallbackButton').style.display = 'inline-block';
-            document.getElementById('message').innerHTML =
-              'If you have LawyerBuddy installed, it should open. Otherwise, install it first.';
-          }
-        });
-      </script>
     </body>
     </html>
   `;

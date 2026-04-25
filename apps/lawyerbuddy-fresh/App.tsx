@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { saveTokens, getToken, validateEmail, sanitizeAndValidate, INPUT_LIMITS, saveLastActivityTime, isSessionExpired, checkTokenExpiry } from './src/utils/security';
 // import * as Notifications from 'expo-notifications'; // TODO: Set up push notifications
 
 // Native modules - lazy loaded to handle dev client where they may not be available
@@ -629,6 +630,10 @@ function CaseDetailScreen({
   const [loadingChecklist, setLoadingChecklist] = useState(true);
   const [addingItem, setAddingItem] = useState(false);
 
+  // Checklist Multi-select State (lawyer only)
+  const [checklistSelectionMode, setChecklistSelectionMode] = useState(false);
+  const [selectedChecklistItems, setSelectedChecklistItems] = useState<Set<string>>(new Set());
+
   // Date Picker State
   const [pickedDate, setPickedDate] = useState<Date>(new Date());
   const [selectedMonth, setSelectedMonth] = useState(pickedDate.getMonth());
@@ -852,6 +857,33 @@ function CaseDetailScreen({
     }
   };
 
+  const deleteMultipleChecklistItems = async () => {
+    if (!userToken || !caseData?.id || selectedChecklistItems.size === 0) return;
+
+    try {
+      const deletePromises = Array.from(selectedChecklistItems).map(itemId =>
+        fetch(
+          `https://lawyerbuddy-production.up.railway.app/cases/${caseData.id}/checklist/${itemId}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${userToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+      );
+
+      await Promise.all(deletePromises);
+      console.log('✅ Deleted checklist items:', Array.from(selectedChecklistItems));
+      setChecklistItems(prev => prev.filter(i => !selectedChecklistItems.has(i.id)));
+      setSelectedChecklistItems(new Set());
+      setChecklistSelectionMode(false);
+    } catch (err: any) {
+      console.error('❌ Error deleting multiple checklist items:', err);
+    }
+  };
+
   // Guard against null/undefined caseData
   if (!caseData) {
     return (
@@ -980,18 +1012,20 @@ function CaseDetailScreen({
         <View style={styles.detailSection}>
           <View style={styles.checklistHeader}>
             <Text style={styles.detailSectionTitle}>{t('checklist')}</Text>
-            <TouchableOpacity
-              style={styles.addItemButton}
-              onPress={() => {
-                setShowAddItemInput(!showAddItemInput);
-                setNewItemText('');
-              }}
-            >
-              <Text style={styles.addItemButtonText}>{showAddItemInput ? `✕ ${t('cancel')}` : `+ ${t('addItem')}`}</Text>
-            </TouchableOpacity>
+            {userData?.role === 'lawyer' && (
+              <TouchableOpacity
+                style={styles.addItemButton}
+                onPress={() => {
+                  setShowAddItemInput(!showAddItemInput);
+                  setNewItemText('');
+                }}
+              >
+                <Text style={styles.addItemButtonText}>{showAddItemInput ? `✕ ${t('cancel')}` : `+ ${t('addItem')}`}</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          {showAddItemInput && (
+          {showAddItemInput && userData?.role === 'lawyer' && (
             <View style={styles.addItemInputContainer}>
               <TextInput
                 style={styles.addItemInput}
@@ -1010,6 +1044,41 @@ function CaseDetailScreen({
             </View>
           )}
 
+          {checklistSelectionMode && userData?.role !== 'client' && (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#333333', paddingHorizontal: 12, paddingVertical: 12, flexDirection: 'row', gap: 8, justifyContent: 'space-between', marginBottom: 12 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#555555', justifyContent: 'center', alignItems: 'center' }}
+                onPress={() => {
+                  setChecklistSelectionMode(false);
+                  setSelectedChecklistItems(new Set());
+                }}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 13 }}>{t('cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#22c55e', justifyContent: 'center', alignItems: 'center' }}
+                onPress={async () => {
+                  for (const itemId of Array.from(selectedChecklistItems)) {
+                    const item = checklistItems.find(i => i.id === itemId);
+                    if (item) {
+                      await toggleChecklistItem(item);
+                    }
+                  }
+                  setChecklistSelectionMode(false);
+                  setSelectedChecklistItems(new Set());
+                }}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 13 }}>Mark Complete ({selectedChecklistItems.size})</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#ff4444', justifyContent: 'center', alignItems: 'center' }}
+                onPress={() => deleteMultipleChecklistItems()}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 13 }}>Delete ({selectedChecklistItems.size})</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {loadingChecklist ? (
             <View style={{ paddingVertical: 20, alignItems: 'center' }}>
               <ActivityIndicator color="#0066cc" size="large" />
@@ -1018,39 +1087,65 @@ function CaseDetailScreen({
           ) : checklistItems.length === 0 && !showAddItemInput ? (
             <Text style={styles.emptyChecklistText}>{t('noItems')}</Text>
           ) : (
-            checklistItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.checklistItem}
-                onPress={() => toggleChecklistItem(item)}
-                onLongPress={() => {
-                  Alert.alert(t('delete'), 'Delete this item?', [
-                    { text: t('cancel'), style: 'cancel' },
-                    {
-                      text: t('delete'),
-                      onPress: () => deleteChecklistItem(item.id),
-                      style: 'destructive',
-                    },
-                  ]);
-                }}
-                disabled={addingItem}
-                delayLongPress={500}
-              >
-                <View style={styles.checklistCheckbox}>
-                  {item.is_complete && (
-                    <Text style={styles.checklistCheckmark}>✓</Text>
-                  )}
-                </View>
-                <Text
-                  style={[
-                    styles.checklistItemText,
-                    item.is_complete && styles.checklistItemCompleted,
-                  ]}
+            checklistItems.map((item) => {
+              const isClient = userData?.role === 'client';
+              const isSelected = selectedChecklistItems.has(item.id);
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.checklistItem, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}
+                  onPress={() => {
+                    if (isClient) {
+                      // Client: tap checkbox to mark complete
+                      toggleChecklistItem(item);
+                    } else if (checklistSelectionMode) {
+                      // Lawyer in selection mode: tap to select/deselect
+                      const newSelected = new Set(selectedChecklistItems);
+                      if (newSelected.has(item.id)) {
+                        newSelected.delete(item.id);
+                      } else {
+                        newSelected.add(item.id);
+                      }
+                      setSelectedChecklistItems(newSelected);
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (isClient) {
+                      // Client: no long press action
+                      return;
+                    }
+                    // Lawyer: long press to enter selection mode
+                    setChecklistSelectionMode(true);
+                    setSelectedChecklistItems(new Set([item.id]));
+                  }}
+                  disabled={addingItem}
+                  delayLongPress={500}
                 >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))
+                  {checklistSelectionMode && !isClient && (
+                    <View style={{ width: 24, height: 24, borderRadius: 4, borderWidth: 2, borderColor: '#0066cc', backgroundColor: isSelected ? '#0066cc' : 'transparent', justifyContent: 'center', alignItems: 'center' }}>
+                      {isSelected && <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
+                    </View>
+                  )}
+                  {isClient && (
+                    <View style={[styles.checklistCheckbox, { marginRight: 8 }]}>
+                      {item.is_complete && (
+                        <Text style={styles.checklistCheckmark}>✓</Text>
+                      )}
+                    </View>
+                  )}
+                  <Text
+                    style={[
+                      styles.checklistItemText,
+                      item.is_complete && styles.checklistItemCompleted,
+                      !isClient && item.is_complete && { color: '#22c55e', textDecorationLine: 'line-through' },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
           )}
         </View>
         )}
@@ -2418,6 +2513,23 @@ export default function App() {
           setSavedTemplates(templates);
           console.log('✅ Loaded case templates:', Object.keys(templates).length);
         }
+
+        // Check token expiry on startup
+        const tokenValid = await checkTokenExpiry();
+        if (!tokenValid) {
+          console.log('🔒 Token expired or invalid, showing login screen');
+          setUserToken(null);
+          setUserData(null);
+        } else {
+          // Load stored token and user data if still valid
+          const token = await getToken();
+          const storedRole = await AsyncStorage.getItem('userRole');
+          if (token && storedRole) {
+            setUserToken(token);
+            console.log('✅ Token valid, loading user session');
+            // Token will be refreshed when API calls are made
+          }
+        }
       } catch (err) {
         console.error('Error loading stored data:', err);
       }
@@ -2474,17 +2586,44 @@ export default function App() {
     };
   }, []);
 
+  // Session timeout check - auto logout after 30 minutes of inactivity
+  useEffect(() => {
+    if (!userToken) return;
+
+    const sessionCheckInterval = setInterval(async () => {
+      const expired = await isSessionExpired(30);
+      if (expired) {
+        console.log('🔒 Session expired due to inactivity');
+        Alert.alert('Session Expired', 'Your session has expired due to inactivity. Please log in again.');
+        setUserToken(null);
+        setUserData(null);
+        await AsyncStorage.removeItem('userToken');
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(sessionCheckInterval);
+  }, [userToken]);
+
   const fetchCases = async (tokenOverride?: string) => {
     try {
       setCasesLoading(true);
-      const token = tokenOverride || (await AsyncStorage.getItem('userToken'));
-      setUserToken(token);
+      await saveLastActivityTime();
+      let token = tokenOverride || (await getToken());
 
       if (!token) {
         console.error('❌ No token found for fetching cases');
         setCases([]);
         return;
       }
+
+      // Refresh token if needed
+      if ((await checkTokenExpiry()) === false) {
+        console.error('❌ Token invalid or expired');
+        setCases([]);
+        return;
+      }
+
+      setUserToken(token);
 
       console.log('📥 Fetching cases with token...');
       const response = await fetch('https://lawyerbuddy-production.up.railway.app/cases', {
@@ -3161,6 +3300,19 @@ export default function App() {
       return;
     }
 
+    // Validate email format
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    // Sanitize password input
+    const { valid: passwordValid } = sanitizeAndValidate(password, INPUT_LIMITS.PASSWORD);
+    if (!passwordValid) {
+      setError('Invalid password format');
+      return;
+    }
+
     setLoading(true);
 
     console.log('Attempting login to:', 'https://lawyerbuddy-production.up.railway.app/auth/login');
@@ -3205,9 +3357,10 @@ export default function App() {
         return;
       }
 
-      // Store token and role
-      await AsyncStorage.setItem('userToken', data.session.access_token);
+      // Store token securely and role
+      await saveTokens(data.session.access_token, data.session.refresh_token);
       await AsyncStorage.setItem('userRole', role);
+      await saveLastActivityTime();
 
       // Save or clear email based on remember email checkbox
       if (rememberEmail) {

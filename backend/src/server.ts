@@ -62,7 +62,7 @@ app.get('/health', (req, res) => {
 });
 
 // Invite redirect route - handles deep linking for invite acceptance
-// Redirects to lawyerbuddy://invite/{token} and shows fallback HTML if deep link doesn't work
+// Supports both production app and dev client deep links
 app.get('/invite/:token', (req, res) => {
   const { token } = req.params;
 
@@ -70,8 +70,9 @@ app.get('/invite/:token', (req, res) => {
     return res.status(400).json({ error: 'Invite token is required' });
   }
 
-  const deepLink = `lawyerbuddy://invite/${token}`;
-  const testflightLink = 'https://testflight.apple.com/join/YOUR_TESTFLIGHT_CODE'; // Update with actual TestFlight link
+  const prodDeepLink = `lawyerbuddy://invite/${token}`;
+  const devClientDeepLink = `exp+lawyerbuddy://expo-development-client/?url=https%3A%2F%2Feszvk8i-vonschlichten-8081.exp.direct&token=${token}`;
+  const testflightLink = 'https://testflight.apple.com/join/YOUR_TESTFLIGHT_CODE';
 
   // Return HTML page with prominent button (requires user gesture for iOS Safari)
   const html = `
@@ -164,9 +165,37 @@ app.get('/invite/:token', (req, res) => {
           background-color: rgba(0, 102, 204, 0.1);
         }
 
+        .tertiary-button {
+          background-color: transparent;
+          color: #34c759;
+          border: 2px solid #34c759;
+          padding: 14px 30px;
+          font-size: 16px;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
+          text-decoration: none;
+          display: inline-block;
+          width: 100%;
+          box-sizing: border-box;
+          margin-bottom: 16px;
+          transition: background-color 0.2s;
+        }
+
+        .tertiary-button:active {
+          background-color: rgba(52, 199, 89, 0.1);
+        }
+
         .divider {
           margin: 24px 0;
           color: #444444;
+        }
+
+        .dev-note {
+          font-size: 12px;
+          color: #999999;
+          margin-top: 16px;
+          font-style: italic;
         }
 
         .footer {
@@ -185,18 +214,26 @@ app.get('/invite/:token', (req, res) => {
 
         <div class="instructions">
           You've been invited to view a case in LawyerBuddy.<br/>
-          Tap the button below to open the app and view your invitation.
+          Tap a button below to open the app and view your invitation.
         </div>
 
-        <a href="${deepLink}" class="primary-button">
-          Open LawyerBuddy
+        <a href="${prodDeepLink}" class="primary-button">
+          📱 Open LawyerBuddy
+        </a>
+
+        <a href="${devClientDeepLink}" class="tertiary-button">
+          🧪 Open Dev Client (Testing)
         </a>
 
         <div class="divider">or</div>
 
         <a href="${testflightLink}" class="secondary-button">
-          Download LawyerBuddy
+          ⬇️ Download LawyerBuddy
         </a>
+
+        <div class="dev-note">
+          👨‍💻 Dev Client link is for local testing with Expo
+        </div>
 
         <div class="footer">
           If you don't have LawyerBuddy installed, download it from the App Store or join our TestFlight beta.

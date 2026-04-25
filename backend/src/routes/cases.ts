@@ -416,11 +416,18 @@ router.post('/:id/invite', verifyJWT, async (req: Request, res: Response) => {
     const inviteLink = `https://lawyerbuddy-production.up.railway.app/invite/${token}`;
     const resendApiKey = process.env.RESEND_API_KEY;
 
-    console.log('📧 Invite email - API key:', resendApiKey ? 'present' : 'missing');
+    // Log API key status with first 5 chars for debugging
+    if (resendApiKey) {
+      const keyPreview = resendApiKey.substring(0, 5) + '...' + resendApiKey.substring(resendApiKey.length - 3);
+      console.log(`📧 Invite email - RESEND_API_KEY present: ${keyPreview} (length: ${resendApiKey.length})`);
+    } else {
+      console.warn('⚠️ RESEND_API_KEY is undefined in process.env');
+      console.warn('   Available env vars:', Object.keys(process.env).filter(k => k.includes('RESEND') || k.includes('EMAIL')).join(', ') || 'none');
+    }
 
     if (resendApiKey) {
       try {
-        console.log('📧 Sending invite email to:', invitedEmail);
+        console.log(`📧 Sending invite email to: ${invitedEmail}`);
         const resend = new Resend(resendApiKey);
         const emailResponse = await resend.emails.send({
           from: 'onboarding@resend.dev',
@@ -447,13 +454,18 @@ router.post('/:id/invite', verifyJWT, async (req: Request, res: Response) => {
             </div>
           `,
         });
-        console.log('✅ Invite email sent successfully:', { to: invitedEmail, messageId: emailResponse.data?.id || 'unknown' });
+        console.log(`✅ Invite email sent successfully to ${invitedEmail}:`, { messageId: emailResponse.data?.id || 'unknown' });
       } catch (emailError: any) {
-        console.error('⚠️ Failed to send invite email:', { to: invitedEmail, error: emailError.message, code: emailError.code });
+        console.error(`❌ Failed to send invite email to ${invitedEmail}:`, {
+          message: emailError.message,
+          code: emailError.code,
+          status: emailError.status,
+          stack: emailError.stack,
+        });
         // Don't fail the request if email sending fails - token is still generated
       }
     } else {
-      console.warn('⚠️ RESEND_API_KEY not set in environment - invite emails will not be sent');
+      console.warn('⚠️ Skipping email - RESEND_API_KEY not configured in environment');
     }
 
     // Log invite generation for audit trail

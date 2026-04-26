@@ -2215,8 +2215,10 @@ function AcceptInviteScreen({
   onSuccess?: (token: string, userData: any) => void;
   styles: any;
 }) {
+  const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [invitePassword, setInvitePassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [inviteData, setInviteData] = useState<any>(null);
   const [error, setError] = useState('');
@@ -2237,6 +2239,7 @@ function AcceptInviteScreen({
 
       if (data.success) {
         setInviteData(data);
+        setEmail(data.invitedEmail || '');
         console.log('✅ Invite valid:', data);
       } else {
         setError(data.error || 'Invalid invite');
@@ -2249,12 +2252,30 @@ function AcceptInviteScreen({
   };
 
   const handleAcceptInvite = async () => {
-    if (!fullName.trim() || !invitePassword.trim()) {
-      setError('Please fill in all fields');
+    // Validate all fields
+    if (!email.trim()) {
+      setError('Email is required');
+      return;
+    }
+    if (!fullName.trim()) {
+      setError('Full name is required');
+      return;
+    }
+    if (!invitePassword.trim()) {
+      setError('Password is required');
+      return;
+    }
+    if (invitePassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    if (invitePassword !== confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
 
     setAccepting(true);
+    setError('');
 
     try {
       const response = await fetch(
@@ -2266,9 +2287,9 @@ function AcceptInviteScreen({
           },
           body: JSON.stringify({
             token: inviteToken,
-            email: inviteData.invitedEmail,
+            email: email.trim(),
             password: invitePassword,
-            fullName,
+            fullName: fullName.trim(),
           }),
         }
       );
@@ -2354,6 +2375,19 @@ function AcceptInviteScreen({
             </View>
 
             <View style={{ marginBottom: 24 }}>
+              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>Email (Read-only)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: '#1a1a1a', color: '#999999' }]}
+                placeholder="Email"
+                placeholderTextColor="#666666"
+                value={email}
+                onChangeText={setEmail}
+                editable={false}
+                keyboardType="email-address"
+              />
+            </View>
+
+            <View style={{ marginBottom: 24 }}>
               <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>{t('fullName')}</Text>
               <TextInput
                 style={styles.input}
@@ -2380,6 +2414,21 @@ function AcceptInviteScreen({
               />
             </View>
 
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ color: '#888888', fontSize: 12, marginBottom: 8 }}>Confirm Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Confirm password"
+                placeholderTextColor="#666666"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                editable={!accepting}
+                textContentType="oneTimeCode"
+                autoComplete="off"
+              />
+            </View>
+
             {error && <Text style={{ color: '#ff4444', marginBottom: 16 }}>❌ {error}</Text>}
 
             <TouchableOpacity
@@ -2390,7 +2439,7 @@ function AcceptInviteScreen({
               {accepting ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
-                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 16 }}>{t('createAccount')}</Text>
+                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 16 }}>Create Account & Accept</Text>
               )}
             </TouchableOpacity>
 
